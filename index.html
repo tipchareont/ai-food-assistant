@@ -35,6 +35,15 @@
     .top-score span { color:var(--muted); font-weight:800; font-size:.82rem; }
     .top-score strong { display:block; margin-top:8px; font-size:3rem; line-height:1; color:var(--primary2); }
     .run-box { display:grid; gap:10px; }
+    .dataset-box { display:grid; gap:10px; padding:14px; border-radius:16px; background:#fff; border:1px solid var(--line); }
+    .dataset-box .dataset-meta { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .meta-card { padding:10px 12px; border-radius:12px; background:var(--surface2); border:1px solid var(--line); }
+    .meta-card strong { display:block; margin-top:3px; font-size:1.05rem; }
+    .scrape-panel { padding:18px; }
+    .scrape-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:end; }
+    .scrape-grid .wide { grid-column:1 / -1; }
+    .scrape-title { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; margin-bottom:12px; }
+    .scrape-title p { color:var(--muted); font-size:.9rem; margin-top:4px; }
     .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     label { color:var(--muted); font-size:.78rem; font-weight:800; }
     input,select,textarea { width:100%; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:12px; min-height:40px; padding:9px 11px; font:inherit; }
@@ -136,7 +145,7 @@
     @media (max-width:720px) {
       .page { width:min(100% - 22px,var(--max)); padding-top:16px; }
       .hero-main,.hero-side { padding:20px; }
-      .summary-grid,.tools-grid,.recommend-grid,.criteria-grid,.analysis-grid,.evidence-grid,.toolbar,.form-row { grid-template-columns:1fr; }
+      .summary-grid,.tools-grid,.recommend-grid,.criteria-grid,.analysis-grid,.evidence-grid,.toolbar,.form-row,.scrape-grid,.dataset-box .dataset-meta { grid-template-columns:1fr; }
       .tech-content .tools-grid { grid-template-columns:1fr; }
       .tech-details summary { display:grid; }
       .section-head { display:grid; }
@@ -164,18 +173,53 @@
           <strong id="hero-score"></strong>
           <p class="hint" id="hero-recommendation"></p>
         </div>
-        <div class="run-box">
-          <div class="form-row">
-            <div><label>Dataset Area</label><select id="area-select" title="เลือกพื้นที่ของ Dataset ที่มีอยู่แล้ว"></select></div>
-            <div><label>จำนวนร้านที่ต้องการ Scrape</label><input id="target-count" type="number" min="1" max="100" value="20" title="จำนวนร้านที่ต้องการให้ Apify ไป Scrape"></div>
+
+        <div class="dataset-box">
+          <div>
+            <label>Dataset Area Filter</label>
+            <select id="area-select" title="เลือกพื้นที่ของ Dataset ที่มีอยู่แล้ว"></select>
+            <p class="hint">ใช้สำหรับกรองข้อมูลที่โหลดเข้ามาแล้วเท่านั้น ไม่ได้สั่ง Scrape ใหม่</p>
           </div>
-          <div><label>พื้นที่ใหม่ที่ต้องการค้นหา</label><input id="refresh-area-input" value="" placeholder="เช่น พระราม 9 / อารีย์ / สยาม" title="พื้นที่ใหม่ที่จะส่งไปให้ n8n ใช้กับ Apify"></div>
-          <div><label>Keyword สำหรับ Scrape ใหม่</label><input id="keyword-input" value="" placeholder="เช่น ร้านอาหาร พระราม 9" title="Keyword ที่จะส่งให้ Apify ค้นหาร้านใหม่"></div>
-          <button id="run-workflow">ค้นหาพื้นที่ใหม่</button>
-          <p class="status" id="run-status">Dataset Area ใช้กรองข้อมูลเดิม ส่วนพื้นที่ใหม่ + Keyword ใช้สั่ง Scrape ใหม่</p>
+          <div class="dataset-meta">
+            <div class="meta-card">
+              <span class="label">Loaded Restaurants</span>
+              <strong id="loaded-count">-</strong>
+            </div>
+            <div class="meta-card">
+              <span class="label">Current Run</span>
+              <strong id="current-run">-</strong>
+            </div>
+          </div>
         </div>
       </aside>
     </header>
+
+    <section>
+      <div class="panel scrape-panel">
+        <div class="scrape-title">
+          <div>
+            <h2>New Scrape Request</h2>
+            <p>กล่องนี้ใช้สั่ง n8n + Apify ให้ค้นหาร้านชุดใหม่ โดยส่งพื้นที่, Keyword และจำนวนร้านไปยัง Workflow</p>
+          </div>
+        </div>
+        <div class="scrape-grid">
+          <div>
+            <label>พื้นที่ใหม่ที่ต้องการค้นหา</label>
+            <input id="refresh-area-input" value="" placeholder="เช่น พระราม 9 / อารีย์ / สยาม" title="พื้นที่ใหม่ที่จะส่งไปให้ n8n ใช้กับ Apify">
+          </div>
+          <div>
+            <label>จำนวนร้านที่ต้องการ Scrape</label>
+            <input id="target-count" type="number" min="1" max="100" value="20" title="จำนวนร้านที่ต้องการให้ Apify ไป Scrape">
+          </div>
+          <div class="wide">
+            <label>Keyword สำหรับ Scrape ใหม่</label>
+            <input id="keyword-input" value="" placeholder="เช่น ร้านอาหาร พระราม 9" title="Keyword ที่จะส่งให้ Apify ค้นหาร้านใหม่">
+          </div>
+          <button id="run-workflow" class="wide">ค้นหาพื้นที่ใหม่</button>
+          <p class="status wide" id="run-status">พร้อมส่งคำสั่งค้นหาพื้นที่ใหม่</p>
+        </div>
+      </div>
+    </section>
 
     <section>
       <div class="section-head"><div><h2>Executive Summary</h2><p>ภาพรวมข้อมูล เครื่องมือ และผลลัพธ์หลักสำหรับตัดสินใจเลือกร้านอาหารของทีม</p></div></div>
@@ -265,14 +309,14 @@
       </details>
     </section>
 
-    <footer>Static report ready for Vercel. Dataset Area filters existing data; พื้นที่ใหม่ + Keyword triggers n8n api-refresh.</footer>
+    <footer>Static report ready for Vercel. Dataset Area filters existing data; New Scrape Request triggers n8n api-refresh; Ask AI Box triggers api-ask.</footer>
   </main>
 
 <script>
 const API_BASE = "https://n8n-external.exservice.io/webhook";
 const RESTAURANTS_API = `${API_BASE}/api-restaurants`;
 const DASHBOARD_API = `${API_BASE}/api-dashboard`;
-const WEBHOOK_ENDPOINT = `${API_BASE}/api-refresh`;
+const WEBHOOK_ENDPOINT = ""; // TODO: ใช้ภายหลังสำหรับสั่ง Scrape ใหม่ เช่น `${API_BASE}/api-refresh`
 
 let reportData = {
   "project": {
@@ -1012,6 +1056,8 @@ function initHeader() {
   qs("status-badge").textContent = reportData.project.status;
   qs("hero-score").textContent = reportData.summary.topScore;
   qs("hero-recommendation").textContent = reportData.summary.topRecommendation;
+  if (qs("loaded-count")) qs("loaded-count").textContent = reportData.summary.totalRestaurants || getDatasetRows().length || "-";
+  if (qs("current-run")) qs("current-run").textContent = getDatasetRows()[0]?.runId || "-";
   qs("area-select").innerHTML = areas.map(a => `<option value="${escapeHtml(a)}" ${a === reportData.project.area ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
   qs("area-select").addEventListener("change", handleAreaChange);
 }
@@ -1155,12 +1201,12 @@ function renderEvidence() {
 
 function setupRunWorkflow() {
   qs("run-workflow").addEventListener("click", async () => {
-    const areaInput = qs("refresh-area-input")?.value.trim() || qs("area-select").value || reportData.project.area;
+    const areaInput = qs("refresh-area-input")?.value.trim() || "";
     let keyword = qs("keyword-input").value.trim();
     let targetCount = Number(qs("target-count").value || 20);
 
     if (!areaInput) {
-      qs("run-status").textContent = "กรุณากรอกพื้นที่ที่ต้องการค้นหา เช่น พระราม 9";
+      qs("run-status").textContent = "กรุณากรอกพื้นที่ใหม่ที่ต้องการค้นหา เช่น พระราม 9";
       qs("refresh-area-input")?.focus();
       return;
     }
@@ -1190,7 +1236,7 @@ function setupRunWorkflow() {
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — รอ Workflow ประมวลผลแล้วค่อย Refresh หน้าเว็บ`;
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — รอ Workflow ประมวลผลแล้ว Refresh หน้าเว็บ`;
     } catch (err) {
       qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
     } finally {
@@ -1212,25 +1258,64 @@ function setupAskBox() {
   qs("ask-button").addEventListener("click", answerQuestion);
 }
 
-function answerQuestion() {
-  const q = qs("ask-input").value.trim().toLowerCase();
-  const top = [...reportData.top10].sort((a,b)=>Number(a.rank)-Number(b.rank));
-  let answer = "";
-  if (!q) answer = "กรุณาพิมพ์คำถามก่อน";
-  else if (q.includes("รีวิว")) {
-    const r = [...top].sort((a,b)=>Number(b.reviews||0)-Number(a.reviews||0))[0];
-    answer = `ร้านที่มีรีวิวมากที่สุดในชุดข้อมูลนี้คือ ${r.restaurant} จำนวน ${fmt(r.reviews)} รีวิว คะแนนรวม ${r.total}/100`;
-  } else if (q.includes("งบ") || q.includes("ราคา")) {
-    const r = top.filter(x => Number(x.price) >= 15).slice(0,3);
-    answer = "ตัวเลือกที่คุ้มค่ากว่าในชุดนี้:\n" + r.map(x => `#${x.rank} ${x.restaurant} — Total ${x.total}/100, Price Score ${x.price}`).join("\n");
-  } else if (q.includes("โทร") || q.includes("จอง")) {
-    answer = "ควรโทรจองล่วงหน้าสำหรับร้าน Top 3 ทั้งหมด โดยเฉพาะทีม 8-12 คน:\n" + reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.tradeoff}`).join("\n");
-  } else {
-    answer = `Top 3 จาก Dataset นี้คือ:\n${reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.totalScore}/100`).join("\n")}\n\n${reportData.analysis.recommendedUseCase}`;
+async function answerQuestion() {
+  const question = qs("ask-input").value.trim();
+  if (!question) {
+    qs("ask-answer").textContent = "กรุณาพิมพ์คำถามก่อน";
+    qs("ask-input").focus();
+    return;
   }
-  qs("ask-answer").textContent = answer;
+
+  qs("ask-button").disabled = true;
+  qs("ask-answer").textContent = "🤖 AI กำลังวิเคราะห์จาก Dataset ล่าสุด...";
+
+  try {
+    const res = await fetch(ASK_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question })
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    const restaurants = Array.isArray(data.recommended_restaurants) ? data.recommended_restaurants : [];
+
+    const recText = restaurants.length
+      ? "\n\nร้านที่ AI แนะนำ:\n" + restaurants.map(r => {
+          const rank = r.rank ? `#${r.rank} ` : "";
+          const name = r.restaurant_name || r.restaurant || "ไม่ระบุชื่อร้าน";
+          const reason = r.reason ? ` — ${r.reason}` : "";
+          return `${rank}${name}${reason}`;
+        }).join("\n")
+      : "";
+
+    qs("ask-answer").textContent =
+      `${data.answer || "AI ไม่ได้ส่งคำตอบกลับมา"}${recText}\n\nConfidence: ${data.confidence || "medium"}`;
+  } catch (err) {
+    console.warn("api-ask failed, using local fallback", err);
+    qs("ask-answer").textContent = localAnswerQuestion(question) + `\n\nหมายเหตุ: api-ask ยังตอบกลับไม่สำเร็จ (${err.message})`;
+  } finally {
+    qs("ask-button").disabled = false;
+  }
 }
 
+function localAnswerQuestion(question) {
+  const q = question.toLowerCase();
+  const top = [...reportData.top10].sort((a,b)=>Number(a.rank)-Number(b.rank));
+  if (q.includes("รีวิว")) {
+    const r = [...top].sort((a,b)=>Number(b.reviews||0)-Number(a.reviews||0))[0];
+    return `ร้านที่มีรีวิวมากที่สุดในชุดข้อมูลนี้คือ ${r.restaurant} จำนวน ${fmt(r.reviews)} รีวิว คะแนนรวม ${r.total}/100`;
+  }
+  if (q.includes("งบ") || q.includes("ราคา")) {
+    const r = top.filter(x => Number(x.price) >= 15).slice(0,3);
+    return "ตัวเลือกที่คุ้มค่ากว่าในชุดนี้:\n" + r.map(x => `#${x.rank} ${x.restaurant} — Total ${x.total}/100, Price Score ${x.price}`).join("\n");
+  }
+  if (q.includes("โทร") || q.includes("จอง")) {
+    return "ควรโทรจองล่วงหน้าสำหรับร้าน Top 3 ทั้งหมด โดยเฉพาะทีม 8-12 คน:\n" + reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.tradeoff}`).join("\n");
+  }
+  return `Top 3 จาก Dataset นี้คือ:\n${reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.totalScore}/100`).join("\n")}\n\n${reportData.analysis.recommendedUseCase}`;
+}
 
 function normalizeRestaurant(row) {
   const rank = Number(row.rank || 0);
