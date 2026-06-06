@@ -167,11 +167,12 @@
         <div class="run-box">
           <div class="form-row">
             <div><label>Dataset Area</label><select id="area-select" title="เลือกพื้นที่ของ Dataset ที่มีอยู่แล้ว"></select></div>
-            <div><label>Target Count</label><input id="target-count" type="number" min="5" value="20" title="จำนวนร้านที่ต้องการให้ Scrape เมื่อค้นหาพื้นที่ใหม่"></div>
+            <div><label>จำนวนร้านที่ต้องการ Scrape</label><input id="target-count" type="number" min="1" max="100" value="20" title="จำนวนร้านที่ต้องการให้ Apify ไป Scrape"></div>
           </div>
-          <div><label>Keyword สำหรับ Scrape ใหม่</label><input id="keyword-input" value="" placeholder="เช่น ร้านอาหาร พระราม 9" title="ใช้เมื่ออยากสั่ง n8n ไปเก็บข้อมูลพื้นที่ใหม่"></div>
+          <div><label>พื้นที่ใหม่ที่ต้องการค้นหา</label><input id="refresh-area-input" value="" placeholder="เช่น พระราม 9 / อารีย์ / สยาม" title="พื้นที่ใหม่ที่จะส่งไปให้ n8n ใช้กับ Apify"></div>
+          <div><label>Keyword สำหรับ Scrape ใหม่</label><input id="keyword-input" value="" placeholder="เช่น ร้านอาหาร พระราม 9" title="Keyword ที่จะส่งให้ Apify ค้นหาร้านใหม่"></div>
           <button id="run-workflow">ค้นหาพื้นที่ใหม่</button>
-          <p class="status" id="run-status">Area ใช้กรอง Dataset ที่มีอยู่แล้ว ส่วน Keyword ใช้สั่ง Scrape พื้นที่ใหม่</p>
+          <p class="status" id="run-status">Dataset Area ใช้กรองข้อมูลเดิม ส่วนพื้นที่ใหม่ + Keyword ใช้สั่ง Scrape ใหม่</p>
         </div>
       </aside>
     </header>
@@ -264,14 +265,14 @@
       </details>
     </section>
 
-    <footer>Static report ready for Vercel. Dataset Area filters existing data; Keyword triggers a new scrape when WEBHOOK_ENDPOINT is configured.</footer>
+    <footer>Static report ready for Vercel. Dataset Area filters existing data; พื้นที่ใหม่ + Keyword triggers n8n api-refresh.</footer>
   </main>
 
 <script>
 const API_BASE = "https://n8n-external.exservice.io/webhook";
 const RESTAURANTS_API = `${API_BASE}/api-restaurants`;
 const DASHBOARD_API = `${API_BASE}/api-dashboard`;
-const WEBHOOK_ENDPOINT = ""; // TODO: ใช้ภายหลังสำหรับสั่ง Scrape ใหม่ เช่น `${API_BASE}/api-refresh`
+const WEBHOOK_ENDPOINT = `${API_BASE}/api-refresh`;
 
 let reportData = {
   "project": {
@@ -1154,23 +1155,42 @@ function renderEvidence() {
 
 function setupRunWorkflow() {
   qs("run-workflow").addEventListener("click", async () => {
-    const keyword = qs("keyword-input").value.trim();
-    const payload = { dataset_area: qs("area-select").value, keyword, target_count: Number(qs("target-count").value || 20), source: "Google Maps" };
+    const areaInput = qs("refresh-area-input")?.value.trim() || qs("area-select").value || reportData.project.area;
+    let keyword = qs("keyword-input").value.trim();
+    let targetCount = Number(qs("target-count").value || 20);
+
+    if (!areaInput) {
+      qs("run-status").textContent = "กรุณากรอกพื้นที่ที่ต้องการค้นหา เช่น พระราม 9";
+      qs("refresh-area-input")?.focus();
+      return;
+    }
+
     if (!keyword) {
-      qs("run-status").textContent = "กรอก Keyword ก่อน เช่น ร้านอาหาร พระราม 9 เพื่อสั่ง Scrape พื้นที่ใหม่";
-      qs("keyword-input").focus();
-      return;
+      keyword = `ร้านอาหาร ${areaInput}`;
+      qs("keyword-input").value = keyword;
     }
-    if (!WEBHOOK_ENDPOINT) {
-      qs("run-status").textContent = `Static mode: พร้อมส่งคำค้นใหม่ "${payload.keyword}" แต่ยังไม่ได้ตั้งค่า Webhook`;
-      return;
-    }
+
+    if (!Number.isFinite(targetCount) || targetCount < 1) targetCount = 20;
+    if (targetCount > 100) targetCount = 100;
+    qs("target-count").value = targetCount;
+
+    const payload = {
+      area: areaInput,
+      keyword,
+      target_count: targetCount
+    };
+
     qs("run-workflow").disabled = true;
-    qs("run-status").textContent = "กำลังส่งคำสั่งไป n8n...";
+    qs("run-status").textContent = `กำลังส่งคำสั่งไป n8n: ${keyword} (${targetCount} ร้าน)...`;
+
     try {
-      const res = await fetch(WEBHOOK_ENDPOINT, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      const res = await fetch(WEBHOOK_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qs("run-status").textContent = "ส่งคำสั่งสำเร็จ รอ n8n ประมวลผลและอัปเดต Dataset";
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — รอ Workflow ประมวลผลแล้วค่อย Refresh หน้าเว็บ`;
     } catch (err) {
       qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
     } finally {
