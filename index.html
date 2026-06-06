@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Food Assistant: Team Dinner Recommendation</title>
+  <style>
+    :root {
+      --bg:#f6f8fb; --surface:#ffffff; --surface2:#f9fbfd; --text:#0f172a; --muted:#64748b;
+      --line:#e2e8f0; --primary:#2563eb; --primary2:#1d4ed8; --soft:#eff6ff;
+      --green:#059669; --greenSoft:#dcfce7; --amber:#b45309; --amberSoft:#fef3c7;
+      --red:#dc2626; --redSoft:#fee2e2; --purple:#7c3aed; --purpleSoft:#ede9fe; --blueSoft:#dbeafe; --shadow:0 18px 45px rgba(15,23,42,.07);
+      --radius:18px; --max:1180px;
+    }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+    a { color:inherit; }
+    .page { width:min(100% - 32px,var(--max)); margin:0 auto; padding:28px 0 56px; }
+    .hero { display:grid; grid-template-columns:1.4fr .8fr; gap:18px; align-items:stretch; }
+    .panel { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
+    .hero-main { padding:30px; }
+    .eyebrow { margin:0 0 10px; color:var(--primary); font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; font-weight:800; }
+    h1,h2,h3 { margin:0; line-height:1.25; }
+    h1 { font-size:clamp(2rem,4.5vw,3.8rem); letter-spacing:-.04em; }
+    h2 { font-size:clamp(1.35rem,2.2vw,1.9rem); letter-spacing:-.02em; }
+    h3 { font-size:1.02rem; }
+    p { margin:0; }
+    .subtitle { margin-top:14px; color:var(--muted); max-width:760px; }
+    .chips { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+    .chip,.badge { display:inline-flex; align-items:center; gap:8px; padding:7px 12px; min-height:34px; border:1px solid var(--line); border-radius:999px; color:var(--muted); background:var(--surface2); font-size:.86rem; font-weight:700; white-space:nowrap; }
+    .badge { background:var(--greenSoft); color:#047857; border-color:#bbf7d0; }
+    .hero-side { padding:20px; display:grid; align-content:space-between; gap:14px; }
+    .top-score { padding:18px; border-radius:16px; background:linear-gradient(180deg,#eff6ff,#fff); border:1px solid #bfdbfe; box-shadow: inset 0 0 0 1px rgba(37,99,235,.06); }
+    .top-score span { color:var(--muted); font-weight:800; font-size:.82rem; }
+    .top-score strong { display:block; margin-top:8px; font-size:3rem; line-height:1; color:var(--primary2); }
+    .run-box { display:grid; gap:10px; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    label { color:var(--muted); font-size:.78rem; font-weight:800; }
+    input,select,textarea { width:100%; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:12px; min-height:40px; padding:9px 11px; font:inherit; }
+    textarea { resize:vertical; min-height:76px; }
+    button,.btn { appearance:none; border:0; border-radius:999px; min-height:42px; padding:10px 16px; background:var(--primary); color:white; font-weight:850; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+    button.secondary,.btn.secondary { background:#fff; color:var(--primary); border:1px solid var(--primary); }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .status { color:var(--muted); font-size:.85rem; }
+    section { margin-top:30px; }
+    .section-head { display:flex; justify-content:space-between; align-items:flex-end; gap:18px; margin-bottom:14px; }
+    .section-head p { color:var(--muted); max-width:680px; font-size:.94rem; }
+    .grid { display:grid; gap:14px; }
+    .summary-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:0 10px 26px rgba(15,23,42,.045); }
+    .metric-card { padding:18px; min-height:122px; position:relative; overflow:hidden; }
+    .metric-card::before { content:""; position:absolute; inset:0 auto 0 0; width:4px; background:var(--primary); opacity:.8; }
+    .metric-card:nth-child(1)::before { background:var(--green); }
+    .metric-card:nth-child(3)::before { background:var(--purple); }
+    .metric-card:nth-child(5)::before { background:var(--amber); }
+    .label { display:block; color:var(--muted); font-size:.8rem; font-weight:800; }
+    .metric { display:block; margin-top:10px; font-size:1.35rem; font-weight:900; line-height:1.25; }
+    .hint { margin-top:6px; color:var(--muted); font-size:.82rem; }
+    .flow { display:flex; gap:10px; overflow-x:auto; padding:16px; }
+    .flow-node { flex:0 0 auto; padding:11px 14px; border-radius:14px; background:var(--soft); color:#1e3a8a; border:1px solid #bfdbfe; font-weight:850; }
+    .arrow { flex:0 0 auto; align-self:center; color:var(--muted); font-weight:900; }
+    .tools-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .tool,.criteria,.insight,.evidence { padding:18px; }
+    .tool p,.criteria p,.insight p,.evidence p { margin-top:8px; color:var(--muted); font-size:.9rem; }
+    .criteria-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .criteria { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+    .criteria strong { color:var(--primary); font-size:1.75rem; }
+    .recommend-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .recommend { padding:20px; display:flex; flex-direction:column; gap:14px; }
+    .rank-row { display:flex; justify-content:space-between; align-items:center; gap:14px; }
+    .rank { display:inline-flex; width:44px; height:44px; border-radius:50%; align-items:center; justify-content:center; background:var(--primary); color:#fff; font-weight:900; }
+    .score { color:var(--primary2); font-size:2rem; font-weight:950; line-height:1; }
+    .tier { display:inline-flex; width:max-content; padding:5px 10px; border-radius:999px; background:var(--soft); color:#1d4ed8; font-size:.78rem; font-weight:850; }
+    .recommend p { color:var(--muted); font-size:.92rem; }
+    .note { padding:12px 13px; border-radius:14px; background:var(--surface2); color:var(--muted); font-size:.9rem; }
+    .note strong { color:var(--text); }
+    .actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:auto; }
+    .toolbar { display:grid; grid-template-columns:1.1fr .8fr .8fr .8fr; gap:10px; padding:14px; margin-bottom:12px; }
+    .table-wrap { overflow:auto; max-height:720px; }
+    .table-wrap::-webkit-scrollbar { height:12px; width:12px; }
+    .table-wrap::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; border:3px solid #fff; }
+    .table-wrap::-webkit-scrollbar-track { background:#f8fafc; }
+    table { width:100%; min-width:980px; border-collapse:collapse; font-size:.9rem; }
+    th,td { padding:13px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { position:sticky; top:0; background:#f8fafc; color:#334155; font-size:.76rem; font-weight:900; white-space:nowrap; z-index:1; }
+    td.num,th.num { text-align:right; white-space:nowrap; }
+    tbody tr:hover { background:#f8fafc; }
+    tbody tr:nth-child(-n+3) { background:linear-gradient(90deg, rgba(220,252,231,.58), rgba(255,255,255,0)); }
+    .rank-badge { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:28px; border-radius:999px; background:var(--surface2); color:var(--muted); font-weight:900; }
+    .rank-badge.top { background:var(--greenSoft); color:#047857; }
+    .score-pill { display:inline-flex; min-width:58px; justify-content:center; border-radius:999px; padding:4px 9px; background:var(--greenSoft); color:#047857; font-weight:900; }
+    .score-pill.mid { background:var(--blueSoft); color:#1d4ed8; }
+    .score-pill.low { background:var(--amberSoft); color:#92400e; }
+    .tier.top3 { background:var(--greenSoft); color:#047857; }
+    .tier.top10 { background:var(--soft); color:#1d4ed8; }
+    .tier.candidate { background:#f1f5f9; color:#475569; }
+    .analysis-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .evidence-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .evidence dl { margin:0; display:grid; gap:12px; }
+    .evidence div { display:grid; gap:4px; }
+    dt { color:var(--muted); font-size:.78rem; font-weight:900; }
+    dd { margin:0; font-weight:750; }
+    .ask-layout { display:grid; grid-template-columns:1fr 320px; gap:14px; }
+    .chat { padding:18px; }
+    .quick { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+    .quick button { min-height:34px; padding:7px 11px; background:#fff; color:var(--text); border:1px solid var(--line); font-weight:750; }
+    .answer { margin-top:12px; padding:14px; border-radius:14px; background:var(--surface2); color:var(--text); min-height:58px; white-space:pre-wrap; }
+    .qa-note { padding:18px; background:linear-gradient(180deg,#fff,#f8fafc); }
+    .warn { background:var(--amberSoft); color:#92400e; border:1px solid #fde68a; padding:10px 12px; border-radius:14px; font-size:.88rem; }
+    footer { margin-top:30px; color:var(--muted); font-size:.86rem; text-align:center; }
+
+    .technical-section { margin-top:22px; }
+    .tech-details { padding:0; overflow:hidden; box-shadow:none; }
+    .tech-details summary { list-style:none; cursor:pointer; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-weight:850; }
+    .tech-details summary::-webkit-details-marker { display:none; }
+    .tech-details summary::after { content:"แสดงรายละเอียด"; font-size:.78rem; color:var(--primary); background:var(--soft); border:1px solid #bfdbfe; border-radius:999px; padding:5px 10px; }
+    .tech-details[open] summary::after { content:"ซ่อนรายละเอียด"; }
+    .tech-content { border-top:1px solid var(--line); padding:16px 18px 18px; display:grid; gap:16px; }
+    .tech-content .section-head { margin-bottom:8px; }
+    .tech-content h3 { font-size:.95rem; color:#334155; }
+    .tech-content p { color:var(--muted); font-size:.84rem; }
+    .tech-content .flow { padding:10px; box-shadow:none; }
+    .tech-content .flow-node { padding:8px 10px; border-radius:10px; font-size:.82rem; }
+    .tech-content .tools-grid { grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+    .tech-content .tool { padding:12px; box-shadow:none; }
+    .tech-content .tool p { font-size:.8rem; }
+
+    @media (max-width:1050px) {
+      .hero,.ask-layout { grid-template-columns:1fr; }
+      .summary-grid,.tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .tech-content .tools-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .recommend-grid,.criteria-grid,.analysis-grid,.evidence-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .toolbar { grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width:720px) {
+      .page { width:min(100% - 22px,var(--max)); padding-top:16px; }
+      .hero-main,.hero-side { padding:20px; }
+      .summary-grid,.tools-grid,.recommend-grid,.criteria-grid,.analysis-grid,.evidence-grid,.toolbar,.form-row { grid-template-columns:1fr; }
+      .tech-content .tools-grid { grid-template-columns:1fr; }
+      .tech-details summary { display:grid; }
+      .section-head { display:grid; }
+      h1 { font-size:2rem; }
+      th,td { padding:11px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="panel hero-main">
+        <p class="eyebrow">AI Food Decision Assistant</p>
+        <h1 id="project-title"></h1>
+        <p class="subtitle" id="project-description"></p>
+        <div class="chips">
+          <span class="chip" id="area-pill"></span>
+          <span class="chip" id="group-pill"></span>
+          <span class="badge" id="status-badge"></span>
+        </div>
+      </div>
+      <aside class="panel hero-side">
+        <div class="top-score">
+          <span>Top Recommendation</span>
+          <strong id="hero-score"></strong>
+          <p class="hint" id="hero-recommendation"></p>
+        </div>
+        <div class="run-box">
+          <div class="form-row">
+            <div><label>Dataset Area</label><select id="area-select" title="เลือกพื้นที่ของ Dataset ที่มีอยู่แล้ว"></select></div>
+            <div><label>Target Count</label><input id="target-count" type="number" min="5" value="20" title="จำนวนร้านที่ต้องการให้ Scrape เมื่อค้นหาพื้นที่ใหม่"></div>
+          </div>
+          <div><label>Keyword สำหรับ Scrape ใหม่</label><input id="keyword-input" value="" placeholder="เช่น ร้านอาหาร พระราม 9" title="ใช้เมื่ออยากสั่ง n8n ไปเก็บข้อมูลพื้นที่ใหม่"></div>
+          <button id="run-workflow">ค้นหาพื้นที่ใหม่</button>
+          <p class="status" id="run-status">Area ใช้กรอง Dataset ที่มีอยู่แล้ว ส่วน Keyword ใช้สั่ง Scrape พื้นที่ใหม่</p>
+        </div>
+      </aside>
+    </header>
+
+    <section>
+      <div class="section-head"><div><h2>Executive Summary</h2><p>ภาพรวมข้อมูล เครื่องมือ และผลลัพธ์หลักสำหรับตัดสินใจเลือกร้านอาหารของทีม</p></div></div>
+      <div class="grid summary-grid" id="summary-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><h2>Scoring Criteria</h2><p>เกณฑ์คะแนนรวม 100 คะแนน พร้อมเหตุผลที่ตรวจสอบย้อนกลับได้</p></div></div>
+      <div class="grid criteria-grid" id="criteria-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><h2>Top 3 Recommendations</h2><p>ตัวเลือกที่เหมาะที่สุดสำหรับทีม พร้อมเหตุผลและข้อควรระวัง</p></div></div>
+      <div class="grid recommend-grid" id="top3-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><h2>Restaurant Dataset</h2><p>แสดงข้อมูลร้านอาหารทั้งหมดใน Dataset ปัจจุบัน กล่องตารางแสดงทีละประมาณ 10 รายการ และเลื่อนดูรายการที่เหลือได้</p></div></div>
+      <div class="panel toolbar">
+        <input id="search-input" placeholder="ค้นหาร้าน / ประเภทอาหาร">
+        <select id="tier-filter"><option value="">Tier: ทั้งหมด</option></select>
+        <select id="price-filter"><option value="">Price score: ทั้งหมด</option></select>
+        <select id="sort-select">
+          <option value="rank">Sort: Rank</option>
+          <option value="total">Sort: Total score</option>
+          <option value="rating">Sort: Rating</option>
+          <option value="reviews">Sort: Reviews</option>
+        </select>
+      </div>
+      <div class="panel table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="num">Rank</th><th>Restaurant</th><th>Type</th><th class="num">Rating</th><th class="num">Reviews</th>
+              <th class="num">Group</th><th class="num">Price</th><th class="num">Travel</th><th class="num">Completeness</th><th class="num">Unique</th><th class="num">Total</th><th>Tier</th><th>Map</th>
+            </tr>
+          </thead>
+          <tbody id="ranking-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><h2>AI Insight</h2><p>สรุปมุมมองจาก AI Analysis เพื่อช่วยเลือกตัวเลือกที่เหมาะกับบริบททีม</p></div></div>
+      <div class="grid analysis-grid" id="analysis-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><div><h2>Ask AI Box</h2><p>ถามแบบ Grounded จาก Dataset ในหน้านี้ก่อน ถ้าตั้งค่า Webhook แล้วจึงส่งไป n8n ได้</p></div></div>
+      <div class="ask-layout">
+        <div class="panel chat">
+          <label>ถามเกี่ยวกับร้านใน Dataset</label>
+          <textarea id="ask-input" placeholder="เช่น ร้านไหนเหมาะกับทีม 8-12 คนและราคาไม่แรง?"></textarea>
+          <div class="quick" id="quick-questions"></div>
+          <button id="ask-button">ถามจาก Dataset</button>
+          <div class="answer" id="ask-answer">คำตอบจะแสดงที่นี่</div>
+        </div>
+        <aside class="panel qa-note">
+          <h3>Grounded Rules</h3>
+          <p class="hint">กล่องนี้ตอบจากข้อมูลใน reportData เท่านั้น ไม่เดาข้อมูลนอก Dataset</p>
+          <div class="warn" style="margin-top:12px;">สำหรับ Production ให้เชื่อม n8n Webhook ผ่าน Vercel Serverless Function เพื่อซ่อน URL และ Token</div>
+        </aside>
+      </div>
+    </section>
+
+
+    <section class="technical-section" aria-label="Technical workflow details">
+      <details class="panel tech-details">
+        <summary>Technical Details, Workflow & Evidence <span class="hint">ซ่อนรายละเอียดสำหรับทีมตรวจงาน/ผู้ดูแลระบบ</span></summary>
+        <div class="tech-content">
+          <div>
+            <h3>Workflow Overview</h3>
+            <p>Pipeline ตั้งแต่การดึงข้อมูลจริงจนถึงรายงาน HTML ที่พร้อม Deploy</p>
+            <div class="flow" id="workflow-flow" style="margin-top:10px;"></div>
+          </div>
+          <div>
+            <h3>Methodology / Tools Used</h3>
+            <p>บทบาทของแต่ละเครื่องมือในระบบ AI Workflow</p>
+            <div class="grid tools-grid" id="tools-grid" style="margin-top:10px;"></div>
+          </div>
+          <div>
+            <h3>Evidence / Traceability</h3>
+            <p>แหล่งข้อมูลและร่องรอยการประมวลผลสำหรับทีมตรวจงาน</p>
+            <div class="grid evidence-grid" id="evidence-grid" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer>Static report ready for Vercel. Dataset Area filters existing data; Keyword triggers a new scrape when WEBHOOK_ENDPOINT is configured.</footer>
+  </main>
+
+<script>
+const API_BASE = "https://n8n-external.exservice.io/webhook";
+const RESTAURANTS_API = `${API_BASE}/api-restaurants`;
+const DASHBOARD_API = `${API_BASE}/api-dashboard`;
+const WEBHOOK_ENDPOINT = ""; // TODO: ใช้ภายหลังสำหรับสั่ง Scrape ใหม่ เช่น `${API_BASE}/api-refresh`
+
+let reportData = {
+  "project": {
+    "title": "AI Food Assistant: Team Dinner Recommendation",
+    "area": "อโศก",
+    "targetGroup": "8-12 คน",
+    "status": "AI Workflow Completed",
+    "description": "ระบบช่วยคัดเลือกร้านอาหารสำหรับทีมด้วยข้อมูลจริงจาก Google Maps ผ่าน Apify, n8n, Google Sheets, Gemini 2.5 Flash และ Scoring Model 100 คะแนน",
+    "workflow": [
+      "Apify",
+      "n8n",
+      "Google Sheets",
+      "Gemini 2.5 Flash",
+      "Scoring",
+      "HTML"
+    ]
+  },
+  "availableAreas": [
+    "อโศก",
+    "พร้อมพงษ์",
+    "ทองหล่อ",
+    "อารีย์",
+    "สยาม"
+  ],
+  "summary": {
+    "totalRestaurants": "20",
+    "dataSource": "Google Maps via Apify",
+    "aiModel": "Gemini 2.5 Flash",
+    "scoringModel": "100 คะแนน",
+    "topRecommendation": "สมยงตำซั่ว สุขุมวิท-อโศก",
+    "topScore": 97.2
+  },
+  "scoringCriteria": [
+    {
+      "name": "Rating & Review Quality",
+      "score": 25,
+      "description": "คุณภาพคะแนนดาว จำนวนรีวิว และความน่าเชื่อถือของสัญญาณจากผู้ใช้จริง"
+    },
+    {
+      "name": "Group Suitability",
+      "score": 20,
+      "description": "ความเหมาะสมกับทีม 8-12 คน จาก AI Enrichment และเหตุผลประกอบ"
+    },
+    {
+      "name": "Price Suitability",
+      "score": 15,
+      "description": "ความเหมาะสมของระดับราคาเมื่อเทียบกับมื้อทีมดินเนอร์"
+    },
+    {
+      "name": "Travel Convenience",
+      "score": 15,
+      "description": "ความสะดวกในการเดินทางและตำแหน่งในพื้นที่อโศก/สุขุมวิท"
+    },
+    {
+      "name": "Data Completeness",
+      "score": 15,
+      "description": "ความครบถ้วนของข้อมูล เช่น ที่อยู่ เบอร์โทร เว็บไซต์ และลิงก์ Google Maps"
+    },
+    {
+      "name": "Uniqueness / Experience",
+      "score": 10,
+      "description": "ความน่าสนใจของประเภทอาหาร ประสบการณ์ และคะแนนรีวิวเด่น"
+    }
+  ],
+  "top3": [
+    {
+      "rank": 1,
+      "name": "สมยงตำซั่ว สุขุมวิท-อโศก",
+      "totalScore": 97.2,
+      "tier": "Top 3",
+      "reason": "อาหารไทยราคาเป็นมิตร เหมาะกับการแชร์หลายเมนูในทีม และได้คะแนนรวมสูงที่สุดจากสมดุลด้านราคา การเดินทาง และความเหมาะสมกับกลุ่ม",
+      "tradeoff": "ควรโทรจองล่วงหน้า เพราะร้านที่ราคาเข้าถึงง่ายและคะแนนสูงอาจมีลูกค้าแน่นในช่วงมื้อเย็น",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B8%AA%E0%B8%A1%E0%B8%A2%E0%B8%87%E0%B8%95%E0%B8%B3%E0%B8%8B%E0%B8%B1%E0%B9%88%E0%B8%A7%20%E0%B8%AA%E0%B8%B8%E0%B8%82%E0%B8%B8%E0%B8%A1%E0%B8%A7%E0%B8%B4%E0%B8%97-%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81&query_place_id=ChIJtyENWqaf4jARAqfMnRP3xQY",
+      "evidenceUrl": "#evidence-title"
+    },
+    {
+      "rank": 2,
+      "name": "Eat Am Are 253 Asok Building",
+      "totalScore": 91.2,
+      "tier": "Top 3",
+      "reason": "ร้านสเต็กที่ราคาคุ้มค่า คะแนนรีวิวดี และเหมาะกับทีมที่ต้องการมื้อที่ตัดสินใจง่ายในพื้นที่อโศก",
+      "tradeoff": "ข้อมูลบางส่วนไม่ครบเท่าร้านอื่น และควรเช็กที่นั่งสำหรับทีม 8-12 คนก่อนเดินทาง",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Eat%20Am%20Are%20253%20Asok%20Building&query_place_id=ChIJtz6LEiOf4jARORWzcrLDLBc",
+      "evidenceUrl": "#evidence-title"
+    },
+    {
+      "rank": 3,
+      "name": "PALA PIZZA ROMANA & BISTROT",
+      "totalScore": 91.2,
+      "tier": "Top 3",
+      "reason": "ร้านพิซซ่าใกล้ BTS/MRT เหมาะกับการแชร์อาหาร เดินทางง่าย และมีรีวิวจำนวนมากช่วยเพิ่มความน่าเชื่อถือ",
+      "tradeoff": "พื้นที่อาจแน่นในช่วงพีค ควรโทรจองหรือเช็กเวลาที่เหมาะสมก่อน",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=PALA%20PIZZA%20ROMANA%20%26%20BISTROT&query_place_id=ChIJc90ABuOe4jARvO5E1UXZcZI",
+      "evidenceUrl": "#evidence-title"
+    }
+  ],
+  "top10": [
+    {
+      "area": "อโศก",
+      "rank": 1,
+      "restaurant": "สมยงตำซั่ว สุขุมวิท-อโศก",
+      "restaurantId": "R11",
+      "fullRestaurantId": "RUN_20260606_121127_R11",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.7,
+      "reviews": 754,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 22.2,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 10,
+      "total": 97.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B8%AA%E0%B8%A1%E0%B8%A2%E0%B8%87%E0%B8%95%E0%B8%B3%E0%B8%8B%E0%B8%B1%E0%B9%88%E0%B8%A7%20%E0%B8%AA%E0%B8%B8%E0%B8%82%E0%B8%B8%E0%B8%A1%E0%B8%A7%E0%B8%B4%E0%B8%97-%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81&query_place_id=ChIJtyENWqaf4jARAqfMnRP3xQY"
+    },
+    {
+      "area": "อโศก",
+      "rank": 2,
+      "restaurant": "Eat Am Are 253 Asok Building",
+      "restaurantId": "R8",
+      "fullRestaurantId": "RUN_20260606_121127_R8",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 1441,
+      "foodType": "ร้านสเต็ก",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 6,
+      "total": 91.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Eat%20Am%20Are%20253%20Asok%20Building&query_place_id=ChIJtz6LEiOf4jARORWzcrLDLBc"
+    },
+    {
+      "area": "อโศก",
+      "rank": 3,
+      "restaurant": "PALA PIZZA ROMANA & BISTROT",
+      "restaurantId": "R18",
+      "fullRestaurantId": "RUN_20260606_121127_R18",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 4499,
+      "foodType": "ร้านพิซซ่า",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 12,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 91.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=PALA%20PIZZA%20ROMANA%20%26%20BISTROT&query_place_id=ChIJc90ABuOe4jARvO5E1UXZcZI"
+    },
+    {
+      "area": "อโศก",
+      "rank": 4,
+      "restaurant": "Thong Kee Restaurant",
+      "restaurantId": "R16",
+      "fullRestaurantId": "RUN_20260606_121127_R16",
+      "runId": "RUN_20260606_121127",
+      "rating": 3.8,
+      "reviews": 1069,
+      "foodType": "ภัตตาคารอาหารจีน",
+      "ratingReview": 20.68,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 8,
+      "total": 90.68,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Thong%20Kee%20Restaurant&query_place_id=ChIJ-xG3W3ef4jARuVeDJcy5PNM"
+    },
+    {
+      "area": "อโศก",
+      "rank": 5,
+      "restaurant": "Kenshin Izakaya Asok",
+      "restaurantId": "R1",
+      "fullRestaurantId": "RUN_20260606_121127_R1",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.3,
+      "reviews": 1693,
+      "foodType": "ร้านอาหารอิซาคายะ",
+      "ratingReview": 22.48,
+      "group": 20,
+      "price": 12,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 90.48,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Kenshin%20Izakaya%20Asok&query_place_id=ChIJRbk96-Se4jAR_aE0uywzTRM"
+    },
+    {
+      "area": "อโศก",
+      "rank": 6,
+      "restaurant": "Savoey @Terminal 21 Asok",
+      "restaurantId": "R2",
+      "fullRestaurantId": "RUN_20260606_121127_R2",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.6,
+      "reviews": 3622,
+      "foodType": "ภัตตาคารอาหารทะเล",
+      "ratingReview": 23.56,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 89.56,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Savoey%20%40Terminal%2021%20Asok&query_place_id=ChIJ1afT-oif4jARvl-Fq22OydQ"
+    },
+    {
+      "area": "อโศก",
+      "rank": 7,
+      "restaurant": "Ping's Shark Fin Restaurant Asoke (The Original)",
+      "restaurantId": "R3",
+      "fullRestaurantId": "RUN_20260606_121127_R3",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.6,
+      "reviews": 1595,
+      "foodType": "ภัตตาคารอาหารจีน",
+      "ratingReview": 23.56,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 89.56,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Ping%27s%20Shark%20Fin%20Restaurant%20Asoke%20%28The%20Original%29"
+    },
+    {
+      "area": "อโศก",
+      "rank": 8,
+      "restaurant": "The Local",
+      "restaurantId": "R9",
+      "fullRestaurantId": "RUN_20260606_121127_R9",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.4,
+      "reviews": 3283,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 22.84,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 88.84,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=The%20Local&query_place_id=ChIJc881Nfue4jARsIcIs9ZqPJE"
+    },
+    {
+      "area": "อโศก",
+      "rank": 9,
+      "restaurant": "Big Mama Pizzeria - Italian food Restaurant",
+      "restaurantId": "R7",
+      "fullRestaurantId": "RUN_20260606_121127_R7",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 3392,
+      "foodType": "ร้านอาหารอิตาเลียน",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 8,
+      "total": 86.2,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Big%20Mama%20Pizzeria%20-%20Italian%20food%20Restaurant&query_place_id=ChIJi-pmk-Se4jARCDDEZaF5zfw"
+    },
+    {
+      "area": "อโศก",
+      "rank": 10,
+      "restaurant": "KubKao' KubPla Terminal 21 Asok",
+      "restaurantId": "R17",
+      "fullRestaurantId": "RUN_20260606_121127_R17",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.1,
+      "reviews": 672,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 19.46,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 85.46,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=KubKao%27%20KubPla%20Terminal%2021%20Asok"
+    }
+  ],
+  "allRestaurants": [
+    {
+      "area": "อโศก",
+      "rank": 1,
+      "restaurant": "สมยงตำซั่ว สุขุมวิท-อโศก",
+      "restaurantId": "R11",
+      "fullRestaurantId": "RUN_20260606_121127_R11",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.7,
+      "reviews": 754,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 22.2,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 10,
+      "total": 97.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B8%AA%E0%B8%A1%E0%B8%A2%E0%B8%87%E0%B8%95%E0%B8%B3%E0%B8%8B%E0%B8%B1%E0%B9%88%E0%B8%A7%20%E0%B8%AA%E0%B8%B8%E0%B8%82%E0%B8%B8%E0%B8%A1%E0%B8%A7%E0%B8%B4%E0%B8%97-%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81&query_place_id=ChIJtyENWqaf4jARAqfMnRP3xQY"
+    },
+    {
+      "area": "อโศก",
+      "rank": 2,
+      "restaurant": "Eat Am Are 253 Asok Building",
+      "restaurantId": "R8",
+      "fullRestaurantId": "RUN_20260606_121127_R8",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 1441,
+      "foodType": "ร้านสเต็ก",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 6,
+      "total": 91.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Eat%20Am%20Are%20253%20Asok%20Building&query_place_id=ChIJtz6LEiOf4jARORWzcrLDLBc"
+    },
+    {
+      "area": "อโศก",
+      "rank": 3,
+      "restaurant": "PALA PIZZA ROMANA & BISTROT",
+      "restaurantId": "R18",
+      "fullRestaurantId": "RUN_20260606_121127_R18",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 4499,
+      "foodType": "ร้านพิซซ่า",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 12,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 91.2,
+      "tier": "Top 3",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=PALA%20PIZZA%20ROMANA%20%26%20BISTROT&query_place_id=ChIJc90ABuOe4jARvO5E1UXZcZI"
+    },
+    {
+      "area": "อโศก",
+      "rank": 4,
+      "restaurant": "Thong Kee Restaurant",
+      "restaurantId": "R16",
+      "fullRestaurantId": "RUN_20260606_121127_R16",
+      "runId": "RUN_20260606_121127",
+      "rating": 3.8,
+      "reviews": 1069,
+      "foodType": "ภัตตาคารอาหารจีน",
+      "ratingReview": 20.68,
+      "group": 20,
+      "price": 15,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 8,
+      "total": 90.68,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Thong%20Kee%20Restaurant&query_place_id=ChIJ-xG3W3ef4jARuVeDJcy5PNM"
+    },
+    {
+      "area": "อโศก",
+      "rank": 5,
+      "restaurant": "Kenshin Izakaya Asok",
+      "restaurantId": "R1",
+      "fullRestaurantId": "RUN_20260606_121127_R1",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.3,
+      "reviews": 1693,
+      "foodType": "ร้านอาหารอิซาคายะ",
+      "ratingReview": 22.48,
+      "group": 20,
+      "price": 12,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 90.48,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Kenshin%20Izakaya%20Asok&query_place_id=ChIJRbk96-Se4jAR_aE0uywzTRM"
+    },
+    {
+      "area": "อโศก",
+      "rank": 6,
+      "restaurant": "Savoey @Terminal 21 Asok",
+      "restaurantId": "R2",
+      "fullRestaurantId": "RUN_20260606_121127_R2",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.6,
+      "reviews": 3622,
+      "foodType": "ภัตตาคารอาหารทะเล",
+      "ratingReview": 23.56,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 89.56,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Savoey%20%40Terminal%2021%20Asok&query_place_id=ChIJ1afT-oif4jARvl-Fq22OydQ"
+    },
+    {
+      "area": "อโศก",
+      "rank": 7,
+      "restaurant": "Ping's Shark Fin Restaurant Asoke (The Original)",
+      "restaurantId": "R3",
+      "fullRestaurantId": "RUN_20260606_121127_R3",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.6,
+      "reviews": 1595,
+      "foodType": "ภัตตาคารอาหารจีน",
+      "ratingReview": 23.56,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 89.56,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Ping%27s%20Shark%20Fin%20Restaurant%20Asoke%20%28The%20Original%29"
+    },
+    {
+      "area": "อโศก",
+      "rank": 8,
+      "restaurant": "The Local",
+      "restaurantId": "R9",
+      "fullRestaurantId": "RUN_20260606_121127_R9",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.4,
+      "reviews": 3283,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 22.84,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 88.84,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=The%20Local&query_place_id=ChIJc881Nfue4jARsIcIs9ZqPJE"
+    },
+    {
+      "area": "อโศก",
+      "rank": 9,
+      "restaurant": "Big Mama Pizzeria - Italian food Restaurant",
+      "restaurantId": "R7",
+      "fullRestaurantId": "RUN_20260606_121127_R7",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 3392,
+      "foodType": "ร้านอาหารอิตาเลียน",
+      "ratingReview": 23.2,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 8,
+      "total": 86.2,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Big%20Mama%20Pizzeria%20-%20Italian%20food%20Restaurant&query_place_id=ChIJi-pmk-Se4jARCDDEZaF5zfw"
+    },
+    {
+      "area": "อโศก",
+      "rank": 10,
+      "restaurant": "KubKao' KubPla Terminal 21 Asok",
+      "restaurantId": "R17",
+      "fullRestaurantId": "RUN_20260606_121127_R17",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.1,
+      "reviews": 672,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 19.46,
+      "group": 20,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 85.46,
+      "tier": "Top 10",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=KubKao%27%20KubPla%20Terminal%2021%20Asok"
+    },
+    {
+      "area": "อโศก",
+      "rank": 11,
+      "restaurant": "Rossano's Italian Cuisine",
+      "restaurantId": "R4",
+      "fullRestaurantId": "RUN_20260606_121127_R4",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 1138,
+      "foodType": "ร้านอาหารอิตาเลียน",
+      "ratingReview": 23.2,
+      "group": 14,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 83.2,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Rossano%27s%20Italian%20Cuisine&query_place_id=ChIJge5RZOOe4jARzWYZ3jGvKbA"
+    },
+    {
+      "area": "อโศก",
+      "rank": 12,
+      "restaurant": "Have a Zeed by Steak Lao",
+      "restaurantId": "R12",
+      "fullRestaurantId": "RUN_20260606_121127_R12",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.1,
+      "reviews": 1964,
+      "foodType": "ภัตตาคารอาหารไทย",
+      "ratingReview": 21.76,
+      "group": 20,
+      "price": 8,
+      "travel": 10,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 82.76,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Have%20a%20Zeed%20by%20Steak%20Lao&query_place_id=ChIJ9eldoOOe4jARMJiqUgk_9HA"
+    },
+    {
+      "area": "อโศก",
+      "rank": 13,
+      "restaurant": "Kani Tengoku Asoke Branch / Japanese Restaurant",
+      "restaurantId": "R14",
+      "fullRestaurantId": "RUN_20260606_121127_R14",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.9,
+      "reviews": 393,
+      "foodType": "ภัตตาคารอาหารญี่ปุ่น",
+      "ratingReview": 20.39,
+      "group": 14,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 10,
+      "total": 82.39,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Kani%20Tengoku%20Asoke%20Branch%20%2F%20Japanese%20Restaurant&query_place_id=ChIJ531oLMOf4jARBFnqHG-unag"
+    },
+    {
+      "area": "อโศก",
+      "rank": 14,
+      "restaurant": "Sam Zap Boat Noodle Asoke",
+      "restaurantId": "R19",
+      "fullRestaurantId": "RUN_20260606_121127_R19",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.8,
+      "reviews": 526,
+      "foodType": "ร้านก๋วยเตี๋ยว",
+      "ratingReview": 20.96,
+      "group": 7,
+      "price": 15,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 80.96,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Sam%20Zap%20Boat%20Noodle%20Asoke&query_place_id=ChIJXz7JZG-f4jARA-uqHwE7yYU"
+    },
+    {
+      "area": "อโศก",
+      "rank": 15,
+      "restaurant": "UMA UMA 博多うま馬-Asoke",
+      "restaurantId": "R13",
+      "fullRestaurantId": "RUN_20260606_121127_R13",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.4,
+      "reviews": 692,
+      "foodType": "ร้านอาหารราเมน",
+      "ratingReview": 20.68,
+      "group": 7,
+      "price": 15,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 78.68,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=UMA%20UMA%20%E5%8D%9A%E5%A4%9A%E3%81%86%E3%81%BE%E9%A6%AC-Asoke&query_place_id=ChIJy2FYtOSe4jARm7XlfJjIbUY"
+    },
+    {
+      "area": "อโศก",
+      "rank": 16,
+      "restaurant": "ไทย ไทย ก๋วยเตี๋ยวเรือ เทอร์มินอล 21 อโศก",
+      "restaurantId": "R15",
+      "fullRestaurantId": "RUN_20260606_121127_R15",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 637,
+      "foodType": "ร้านก๋วยเตี๋ยว",
+      "ratingReview": 20.66,
+      "group": 7,
+      "price": 15,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 6,
+      "total": 78.66,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B9%84%E0%B8%97%E0%B8%A2%20%E0%B9%84%E0%B8%97%E0%B8%A2%20%E0%B8%81%E0%B9%8B%E0%B8%A7%E0%B8%A2%E0%B9%80%E0%B8%95%E0%B8%B5%E0%B9%8B%E0%B8%A2%E0%B8%A7%E0%B9%80%E0%B8%A3%E0%B8%B7%E0%B8%AD%20%E0%B9%80%E0%B8%97%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%AD%E0%B8%A5%2021%20%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81"
+    },
+    {
+      "area": "อโศก",
+      "rank": 17,
+      "restaurant": "LIB STORY Thai BBQ & Local Food",
+      "restaurantId": "R6",
+      "fullRestaurantId": "RUN_20260606_121127_R6",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.7,
+      "reviews": 362,
+      "foodType": "ร้านอาหาร",
+      "ratingReview": 19.45,
+      "group": 14,
+      "price": 8,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 10,
+      "total": 78.45,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=LIB%20STORY%20Thai%20BBQ%20%26%20Local%20Food&query_place_id=ChIJ8YxZWVyf4jARCM43QDPqVw4"
+    },
+    {
+      "area": "อโศก",
+      "rank": 18,
+      "restaurant": "Tamaruya Honten Asoke",
+      "restaurantId": "R5",
+      "fullRestaurantId": "RUN_20260606_121127_R5",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.5,
+      "reviews": 269,
+      "foodType": "ร้านเนื้อย่างสไตล์ญี่ปุ่น",
+      "ratingReview": 18.08,
+      "group": 14,
+      "price": 8,
+      "travel": 15,
+      "completeness": 15,
+      "uniqueness": 8,
+      "total": 78.08,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Tamaruya%20Honten%20Asoke&query_place_id=ChIJ15n8_cKf4jAR3rYBtwPMS3c"
+    },
+    {
+      "area": "อโศก",
+      "rank": 19,
+      "restaurant": "กันหม่าล่า - Gan Mala สาขาอโศก",
+      "restaurantId": "R10",
+      "fullRestaurantId": "RUN_20260606_121127_R10",
+      "runId": "RUN_20260606_121127",
+      "rating": 4.9,
+      "reviews": 203,
+      "foodType": "ภัตตาคารอาหารจีน",
+      "ratingReview": 19.06,
+      "group": 7,
+      "price": 15,
+      "travel": 15,
+      "completeness": 9,
+      "uniqueness": 10,
+      "total": 75.06,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B8%81%E0%B8%B1%E0%B8%99%E0%B8%AB%E0%B8%A1%E0%B9%88%E0%B8%B2%E0%B8%A5%E0%B9%88%E0%B8%B2%20-%20Gan%20Mala%20%E0%B8%AA%E0%B8%B2%E0%B8%82%E0%B8%B2%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81"
+    },
+    {
+      "area": "อโศก",
+      "rank": 20,
+      "restaurant": "เชฟวรรณ ผัดไทย สาขาอโศก",
+      "restaurantId": "R20",
+      "fullRestaurantId": "RUN_20260606_121127_R20",
+      "runId": "RUN_20260606_121127",
+      "rating": 5.0,
+      "reviews": 3,
+      "foodType": "ร้านอาหาร",
+      "ratingReview": 18.02,
+      "group": 7,
+      "price": 15,
+      "travel": 15,
+      "completeness": 12,
+      "uniqueness": 8,
+      "total": 75.02,
+      "tier": "Candidate",
+      "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=%E0%B9%80%E0%B8%8A%E0%B8%9F%E0%B8%A7%E0%B8%A3%E0%B8%A3%E0%B8%93%20%E0%B8%9C%E0%B8%B1%E0%B8%94%E0%B9%84%E0%B8%97%E0%B8%A2%20%E0%B8%AA%E0%B8%B2%E0%B8%82%E0%B8%B2%E0%B8%AD%E0%B9%82%E0%B8%A8%E0%B8%81"
+    }
+  ],
+  "analysis": {
+    "top3Summary": "Top 3 รอบล่าสุดคือ สมยงตำซั่ว สุขุมวิท-อโศก, Eat Am Are 253 Asok Building และ PALA PIZZA ROMANA & BISTROT โดยทั้งสามร้านมีคะแนนรวมสูงจากความเหมาะสมกับทีม การเดินทาง และความคุ้มค่าของราคา",
+    "rankingInsight": "หลังแก้การให้คะแนน Group Suitability แล้ว คะแนน Top 10 สะท้อนความเหมาะสมของทีม 8-12 คนชัดขึ้น ร้านที่ได้ High จาก AI จะขยับอันดับสูงขึ้นอย่างมีนัยสำคัญ",
+    "tradeoffSummary": "ร้านที่คุ้มค่าและเดินทางง่ายมักเป็นตัวเลือกอันดับต้น แต่ยังควรโทรจองล่วงหน้า โดยเฉพาะทีม 8-12 คนและช่วงเวลาเย็น",
+    "recommendedUseCase": "เลือกสมยงตำซั่วเมื่อเน้นความคุ้มค่าและอาหารไทยแชร์ง่าย เลือก Eat Am Are เมื่อทีมต้องการตัวเลือกราคาเป็นมิตร และเลือก PALA PIZZA เมื่อเน้นการเดินทางสะดวกและอาหารที่แชร์ได้เร็ว"
+  },
+  "evidence": {
+    "dataSource": "Google Maps",
+    "workflow": "n8n",
+    "aiModel": "Gemini 2.5 Flash",
+    "promptId": "P004, P006",
+    "sheetsUsed": [
+      "02_Raw_Data",
+      "03_Clean_Data",
+      "04_AI_Enrichment",
+      "05_Scoring",
+      "06_AI_Analysis",
+      "06_AI_Analysis"
+    ],
+    "generatedBy": "Codex / HTML"
+  }
+};
+
+const areas = reportData.availableAreas || [reportData.project.area];
+const qs = (id) => document.getElementById(id);
+const fmt = (n) => Number(n ?? 0).toLocaleString("th-TH");
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+}
+
+function initHeader() {
+  qs("project-title").textContent = reportData.project.title;
+  qs("project-description").textContent = reportData.project.description;
+  qs("area-pill").textContent = `Area: ${reportData.project.area}`;
+  qs("group-pill").textContent = `Target group: ${reportData.project.targetGroup}`;
+  qs("status-badge").textContent = reportData.project.status;
+  qs("hero-score").textContent = reportData.summary.topScore;
+  qs("hero-recommendation").textContent = reportData.summary.topRecommendation;
+  qs("area-select").innerHTML = areas.map(a => `<option value="${escapeHtml(a)}" ${a === reportData.project.area ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
+  qs("area-select").addEventListener("change", handleAreaChange);
+}
+
+function getCurrentArea() {
+  return qs("area-select")?.value || reportData.project.area;
+}
+
+function handleAreaChange() {
+  const area = getCurrentArea();
+  qs("area-pill").textContent = `Area: ${area}`;
+  const hasDataset = getDatasetRows().some(r => (r.area || reportData.project.area) === area);
+  qs("run-status").textContent = hasDataset
+    ? `กำลังแสดง Dataset พื้นที่: ${area}`
+    : `ยังไม่มี Dataset ของพื้นที่ ${area} ให้กรอก Keyword แล้วกดค้นหาพื้นที่ใหม่`;
+  renderRanking();
+}
+
+function renderSummary() {
+  const cards = [
+    ["Total Restaurants", reportData.summary.totalRestaurants, "ร้านจากชุดข้อมูลล่าสุด"],
+    ["Data Source", reportData.summary.dataSource, "ข้อมูลจริงจาก Google Maps"],
+    ["AI Model", reportData.summary.aiModel, "ใช้วิเคราะห์และสรุปผล"],
+    ["Scoring Model", reportData.summary.scoringModel, "รวมจาก 6 เกณฑ์หลัก"],
+    ["Top Recommendation", reportData.summary.topRecommendation, `${reportData.summary.topScore}/100`],
+  ];
+  qs("summary-grid").innerHTML = cards.map(([label,value,hint]) => `
+    <article class="card metric-card"><span class="label">${escapeHtml(label)}</span><strong class="metric">${escapeHtml(value)}</strong><p class="hint">${escapeHtml(hint)}</p></article>
+  `).join("");
+}
+
+function renderWorkflow() {
+  qs("workflow-flow").innerHTML = reportData.project.workflow.map((step, i) => `
+    <span class="flow-node">${escapeHtml(step)}</span>${i < reportData.project.workflow.length - 1 ? '<span class="arrow">→</span>' : ""}
+  `).join("");
+}
+
+function renderTools() {
+  const tools = [
+    ["Apify", "Scraping Google Maps data เพื่อดึงข้อมูลร้าน คะแนน รีวิว และข้อมูลอ้างอิง"],
+    ["n8n", "Workflow Automation สำหรับเชื่อมขั้นตอนดึงข้อมูล ทำความสะอาด และส่งต่อข้อมูล"],
+    ["Google Sheets", "Data storage and scoring ใช้เก็บ raw data, clean data และตารางคะแนน"],
+    ["Gemini 2.5 Flash", "AI enrichment and analysis เพื่อสรุปเหตุผล ความเหมาะสม และ trade-off"],
+    ["Vercel / HTML", "Final report พร้อม Deploy และแชร์ URL ให้ผู้อื่นดูได้"],
+  ];
+  qs("tools-grid").innerHTML = tools.map(([name,desc]) => `<article class="card tool"><h3>${escapeHtml(name)}</h3><p>${escapeHtml(desc)}</p></article>`).join("");
+}
+
+function renderCriteria() {
+  qs("criteria-grid").innerHTML = reportData.scoringCriteria.map(item => `
+    <article class="card criteria"><div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.description)}</p></div><strong>${item.score}</strong></article>
+  `).join("");
+}
+
+function renderTop3() {
+  qs("top3-grid").innerHTML = reportData.top3.map(item => `
+    <article class="card recommend">
+      <div class="rank-row"><span class="rank">#${item.rank}</span><span class="score">${item.totalScore}</span></div>
+      <div><h3>${escapeHtml(item.name)}</h3><span class="tier">${escapeHtml(item.tier)}</span></div>
+      <p>${escapeHtml(item.reason)}</p>
+      <div class="note"><strong>Trade-off:</strong> ${escapeHtml(item.tradeoff)}</div>
+      <div class="actions">
+        <a class="btn" href="${escapeHtml(item.googleMapsUrl)}" target="_blank" rel="noopener">Google Maps</a>
+        <a class="btn secondary" href="#evidence-grid">Evidence</a>
+      </div>
+    </article>
+  `).join("");
+}
+
+function getDatasetRows() {
+  return reportData.allRestaurants || reportData.top10 || [];
+}
+
+function getFilteredRows() {
+  const q = qs("search-input").value.trim().toLowerCase();
+  const tier = qs("tier-filter").value;
+  const price = qs("price-filter").value;
+  const sort = qs("sort-select").value;
+  const selectedArea = getCurrentArea();
+  let rows = [...getDatasetRows()].filter(r => {
+    const hay = `${r.restaurant} ${r.foodType || ""}`.toLowerCase();
+    const rowArea = r.area || reportData.project.area;
+    return rowArea === selectedArea && (!q || hay.includes(q)) && (!tier || r.tier === tier) && (!price || String(r.price) === price);
+  });
+  rows.sort((a,b) => {
+    if (sort === "total") return Number(b.total) - Number(a.total);
+    if (sort === "rating") return Number(b.rating || 0) - Number(a.rating || 0);
+    if (sort === "reviews") return Number(b.reviews || 0) - Number(a.reviews || 0);
+    return Number(a.rank) - Number(b.rank);
+  });
+  return rows;
+}
+
+function renderFilters() {
+  const tiers = [...new Set(getDatasetRows().map(r => r.tier).filter(Boolean))];
+  const prices = [...new Set(getDatasetRows().map(r => String(r.price)).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  qs("tier-filter").innerHTML += tiers.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  qs("price-filter").innerHTML += prices.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  ["search-input","tier-filter","price-filter","sort-select"].forEach(id => qs(id).addEventListener("input", renderRanking));
+}
+
+function renderRanking() {
+  const rows = getFilteredRows();
+  qs("ranking-body").innerHTML = rows.map(r => `
+    <tr>
+      <td class="num">${r.rank}</td>
+      <td><strong>${escapeHtml(r.restaurant)}</strong><br><span class="hint">${escapeHtml(r.restaurantId || "")}</span></td>
+      <td>${escapeHtml(r.foodType || "-")}</td>
+      <td class="num">${r.rating ?? "-"}</td>
+      <td class="num">${fmt(r.reviews)}</td>
+      <td class="num">${r.group}</td>
+      <td class="num">${r.price}</td>
+      <td class="num">${r.travel}</td>
+      <td class="num">${r.completeness}</td>
+      <td class="num">${r.uniqueness}</td>
+      <td class="num"><span class="score-pill">${r.total}</span></td>
+      <td><span class="tier">${escapeHtml(r.tier)}</span></td>
+      <td><a class="btn secondary" href="${escapeHtml(r.googleMapsUrl || "#")}" target="_blank" rel="noopener">Map</a></td>
+    </tr>
+  `).join("");
+}
+
+function renderAnalysis() {
+  const items = [
+    ["Top 3 Summary", reportData.analysis.top3Summary],
+    ["Ranking Insight", reportData.analysis.rankingInsight],
+    ["Trade-off Summary", reportData.analysis.tradeoffSummary],
+    ["Recommended Use Case", reportData.analysis.recommendedUseCase],
+  ];
+  qs("analysis-grid").innerHTML = items.map(([title,text]) => `<article class="card insight"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(text)}</p></article>`).join("");
+}
+
+function renderEvidence() {
+  const groups = [
+    [["Data source",reportData.evidence.dataSource],["Workflow",reportData.evidence.workflow],["AI model",reportData.evidence.aiModel]],
+    [["Prompt ID",reportData.evidence.promptId],["Sheets used",reportData.evidence.sheetsUsed.join(", ")],["Final report",reportData.evidence.generatedBy]],
+    [["Traceability","Raw → Clean → AI Enrichment → Scoring → AI Analysis"],["Decision mode","Executive recommendation"],["Deployment","Vercel-ready static page with full dataset table"]],
+  ];
+  qs("evidence-grid").innerHTML = groups.map(g => `<article class="card evidence"><dl>${g.map(([dt,dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join("")}</dl></article>`).join("");
+}
+
+function setupRunWorkflow() {
+  qs("run-workflow").addEventListener("click", async () => {
+    const keyword = qs("keyword-input").value.trim();
+    const payload = { dataset_area: qs("area-select").value, keyword, target_count: Number(qs("target-count").value || 20), source: "Google Maps" };
+    if (!keyword) {
+      qs("run-status").textContent = "กรอก Keyword ก่อน เช่น ร้านอาหาร พระราม 9 เพื่อสั่ง Scrape พื้นที่ใหม่";
+      qs("keyword-input").focus();
+      return;
+    }
+    if (!WEBHOOK_ENDPOINT) {
+      qs("run-status").textContent = `Static mode: พร้อมส่งคำค้นใหม่ "${payload.keyword}" แต่ยังไม่ได้ตั้งค่า Webhook`;
+      return;
+    }
+    qs("run-workflow").disabled = true;
+    qs("run-status").textContent = "กำลังส่งคำสั่งไป n8n...";
+    try {
+      const res = await fetch(WEBHOOK_ENDPOINT, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      qs("run-status").textContent = "ส่งคำสั่งสำเร็จ รอ n8n ประมวลผลและอัปเดต Dataset";
+    } catch (err) {
+      qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
+    } finally {
+      qs("run-workflow").disabled = false;
+    }
+  });
+}
+
+function setupAskBox() {
+  const questions = [
+    "ร้านไหนเหมาะกับทีม 8-12 คนที่สุด?",
+    "ถ้างบไม่สูงควรเลือกร้านไหน?",
+    "ร้านไหนรีวิวเยอะที่สุด?",
+    "ร้านไหนควรโทรจองก่อน?",
+    "สรุป Top 3 ให้หน่อย"
+  ];
+  qs("quick-questions").innerHTML = questions.map(q => `<button type="button">${escapeHtml(q)}</button>`).join("");
+  qs("quick-questions").querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => { qs("ask-input").value = btn.textContent; answerQuestion(); }));
+  qs("ask-button").addEventListener("click", answerQuestion);
+}
+
+function answerQuestion() {
+  const q = qs("ask-input").value.trim().toLowerCase();
+  const top = [...reportData.top10].sort((a,b)=>Number(a.rank)-Number(b.rank));
+  let answer = "";
+  if (!q) answer = "กรุณาพิมพ์คำถามก่อน";
+  else if (q.includes("รีวิว")) {
+    const r = [...top].sort((a,b)=>Number(b.reviews||0)-Number(a.reviews||0))[0];
+    answer = `ร้านที่มีรีวิวมากที่สุดในชุดข้อมูลนี้คือ ${r.restaurant} จำนวน ${fmt(r.reviews)} รีวิว คะแนนรวม ${r.total}/100`;
+  } else if (q.includes("งบ") || q.includes("ราคา")) {
+    const r = top.filter(x => Number(x.price) >= 15).slice(0,3);
+    answer = "ตัวเลือกที่คุ้มค่ากว่าในชุดนี้:\n" + r.map(x => `#${x.rank} ${x.restaurant} — Total ${x.total}/100, Price Score ${x.price}`).join("\n");
+  } else if (q.includes("โทร") || q.includes("จอง")) {
+    answer = "ควรโทรจองล่วงหน้าสำหรับร้าน Top 3 ทั้งหมด โดยเฉพาะทีม 8-12 คน:\n" + reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.tradeoff}`).join("\n");
+  } else {
+    answer = `Top 3 จาก Dataset นี้คือ:\n${reportData.top3.map(x => `#${x.rank} ${x.name} — ${x.totalScore}/100`).join("\n")}\n\n${reportData.analysis.recommendedUseCase}`;
+  }
+  qs("ask-answer").textContent = answer;
+}
+
+
+function normalizeRestaurant(row) {
+  const rank = Number(row.rank || 0);
+  const name = row.restaurant_name || row.restaurant || "";
+  const total = Number(row.total_score || row.total_score_100 || row.total || 0);
+  const recommendation = row.recommendation || row.recommendation_tier || (rank <= 3 ? "Top 3" : rank <= 10 ? "Top 10" : "Candidate");
+  return {
+    area: row.area || reportData.project.area,
+    rank,
+    restaurant: name,
+    restaurantId: String(row.restaurant_id || "").split("_").pop() || row.restaurant_id || "",
+    fullRestaurantId: row.restaurant_id || row.fullRestaurantId || "",
+    runId: row.run_id || row.runId || "",
+    rating: row.rating ?? row.rating_value ?? "-",
+    reviews: row.reviews ?? row.review_count ?? "-",
+    foodType: row.food_type || row.category || "-",
+    ratingReview: Number(row.rating_score || row.rating_review_score_25 || 0),
+    group: Number(row.group_score || row.group_score_20 || 0),
+    price: Number(row.price_score || row.price_score_15 || 0),
+    travel: Number(row.travel_score || row.travel_score_15 || 0),
+    completeness: Number(row.completeness_score || row.data_completeness_score_15 || 0),
+    uniqueness: Number(row.uniqueness_score || row.uniqueness_score_10 || 0),
+    total,
+    tier: recommendation,
+    googleMapsUrl: row.google_maps_url || row.map_url || "#"
+  };
+}
+
+async function loadLiveData() {
+  qs("run-status").textContent = "กำลังโหลดข้อมูลจริงจาก n8n API...";
+  try {
+    const [dashboardRes, restaurantsRes] = await Promise.all([
+      fetch(DASHBOARD_API, { cache: "no-store" }),
+      fetch(RESTAURANTS_API, { cache: "no-store" })
+    ]);
+    if (!dashboardRes.ok) throw new Error(`Dashboard API HTTP ${dashboardRes.status}`);
+    if (!restaurantsRes.ok) throw new Error(`Restaurants API HTTP ${restaurantsRes.status}`);
+
+    const dashboard = await dashboardRes.json();
+    const restaurantsPayload = await restaurantsRes.json();
+    const restaurants = (restaurantsPayload.data || restaurantsPayload || []).map(normalizeRestaurant);
+    const top3Rows = restaurants.slice().sort((a,b)=>a.rank-b.rank).slice(0,3);
+
+    reportData.summary.totalRestaurants = dashboard.total_restaurants || restaurants.length;
+    reportData.summary.topScore = dashboard.top_score || top3Rows[0]?.total || reportData.summary.topScore;
+    reportData.summary.topRecommendation = dashboard.top_restaurant || top3Rows[0]?.restaurant || reportData.summary.topRecommendation;
+    reportData.top10 = restaurants.filter(r => r.rank <= 10);
+    reportData.allRestaurants = restaurants;
+    reportData.top3 = top3Rows.map(r => ({
+      rank: r.rank,
+      name: r.restaurant,
+      totalScore: r.total,
+      tier: r.tier,
+      reason: `คะแนนรวม ${r.total}/100 เหมาะสำหรับการพิจารณาเป็นตัวเลือกอันดับต้นของทีม`,
+      tradeoff: "ควรตรวจสอบที่นั่งและโทรจองก่อนเดินทาง โดยเฉพาะทีม 8-12 คน",
+      googleMapsUrl: r.googleMapsUrl || "#",
+      evidenceUrl: "#evidence-grid"
+    }));
+
+    const runId = dashboard.last_run || restaurants[0]?.runId || "";
+    if (runId) reportData.project.status = `Live Data Loaded · ${runId}`;
+    const liveAreas = [...new Set(restaurants.map(r => r.area).filter(Boolean))];
+    if (liveAreas.length) reportData.availableAreas = liveAreas;
+    qs("run-status").textContent = `โหลดข้อมูลจริงสำเร็จ: ${restaurants.length} ร้าน`;
+  } catch (err) {
+    console.warn("Live API load failed, using embedded fallback data", err);
+    qs("run-status").textContent = `โหลด Live API ไม่สำเร็จ ใช้ข้อมูลสำรองในไฟล์แทน: ${err.message}`;
+  }
+}
+
+function renderApp() {
+  initHeader();
+  renderSummary();
+  renderWorkflow();
+  renderTools();
+  renderCriteria();
+  renderTop3();
+  renderFilters();
+  renderRanking();
+  renderAnalysis();
+  renderEvidence();
+  setupRunWorkflow();
+  setupAskBox();
+}
+
+(async function bootstrap() {
+  await loadLiveData();
+  renderApp();
+})();
+</script>
+</body>
+</html>
