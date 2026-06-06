@@ -279,7 +279,7 @@
         </div>
         <aside class="panel qa-note">
           <h3>Grounded Rules</h3>
-          <p class="hint">กล่องนี้ตอบจากข้อมูลใน reportData เท่านั้น ไม่เดาข้อมูลนอก Dataset</p>
+          <p class="hint">กล่องนี้เรียก n8n api-ask เพื่อถามจาก 05_Scoring และ 06_AI_Analysis ถ้า API ไม่ตอบจะใช้ fallback ในหน้าเว็บ</p>
           <div class="warn" style="margin-top:12px;">สำหรับ Production ให้เชื่อม n8n Webhook ผ่าน Vercel Serverless Function เพื่อซ่อน URL และ Token</div>
         </aside>
       </div>
@@ -1043,7 +1043,16 @@ let reportData = {
 
 const areas = reportData.availableAreas || [reportData.project.area];
 const qs = (id) => document.getElementById(id);
-const fmt = (n) => Number(n ?? 0).toLocaleString("th-TH");
+function fmt(n) {
+  const value = Number(n);
+  return Number.isFinite(value) ? value.toLocaleString("th-TH") : "-";
+}
+
+function safeNumber(value, fallback = "-") {
+  if (value === null || value === undefined || value === "") return fallback;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
@@ -1279,7 +1288,19 @@ async function answerQuestion() {
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const data = await res.json();
+    const rawText = await res.text();
+    if (!rawText.trim()) throw new Error("api-ask ตอบกลับว่าง / workflow อาจยังไม่ Active");
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      throw new Error(`api-ask ไม่ได้ตอบกลับเป็น JSON: ${rawText.slice(0, 120)}`);
+    }
+
+    if (Array.isArray(data)) data = data[0] || {};
+    if (data.json) data = data.json;
+
     const restaurants = Array.isArray(data.recommended_restaurants) ? data.recommended_restaurants : [];
 
     const recText = restaurants.length
@@ -1330,15 +1351,15 @@ function normalizeRestaurant(row) {
     restaurantId: String(row.restaurant_id || "").split("_").pop() || row.restaurant_id || "",
     fullRestaurantId: row.restaurant_id || row.fullRestaurantId || "",
     runId: row.run_id || row.runId || "",
-    rating: row.rating ?? row.rating_value ?? "-",
-    reviews: row.reviews ?? row.review_count ?? "-",
-    foodType: row.food_type || row.category || "-",
-    ratingReview: Number(row.rating_score || row.rating_review_score_25 || 0),
-    group: Number(row.group_score || row.group_score_20 || 0),
-    price: Number(row.price_score || row.price_score_15 || 0),
-    travel: Number(row.travel_score || row.travel_score_15 || 0),
-    completeness: Number(row.completeness_score || row.data_completeness_score_15 || 0),
-    uniqueness: Number(row.uniqueness_score || row.uniqueness_score_10 || 0),
+    rating: safeNumber(row.rating ?? row.rating_value),
+    reviews: safeNumber(row.reviews ?? row.review_count ?? row.reviews_count),
+    foodType: row.food_type || row.foodType || row.category || row.category_raw || row.categoryName || "-",
+    ratingReview: safeNumber(row.rating_score || row.rating_review_score_25, 0),
+    group: safeNumber(row.group_score || row.group_score_20, 0),
+    price: safeNumber(row.price_score || row.price_score_15, 0),
+    travel: safeNumber(row.travel_score || row.travel_score_15, 0),
+    completeness: safeNumber(row.completeness_score || row.data_completeness_score_15, 0),
+    uniqueness: safeNumber(row.uniqueness_score || row.uniqueness_score_10, 0),
     total,
     tier: recommendation,
     googleMapsUrl: row.google_maps_url || row.map_url || "#"
