@@ -316,7 +316,8 @@
 const API_BASE = "https://n8n-external.exservice.io/webhook";
 const RESTAURANTS_API = `${API_BASE}/api-restaurants`;
 const DASHBOARD_API = `${API_BASE}/api-dashboard`;
-const WEBHOOK_ENDPOINT = ""; // TODO: ใช้ภายหลังสำหรับสั่ง Scrape ใหม่ เช่น `${API_BASE}/api-refresh`
+const WEBHOOK_ENDPOINT = `${API_BASE}/api-refresh`;
+const ASK_API = `${API_BASE}/api-ask`;
 
 let reportData = {
   "project": {
