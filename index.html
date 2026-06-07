@@ -322,6 +322,10 @@ const STATUS_API = `${API_BASE}/api-status`;
 
 let statusPollingTimer = null;
 let statusPollingStartedAt = 0;
+let statusPollingAttempts = 0;
+let statusRequestInFlight = false;
+const STATUS_POLL_INTERVAL_MS = 15000;
+const STATUS_POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
 let reportData = {
   "project": {
@@ -1482,6 +1486,9 @@ async function loadLiveData() {
 }
 
 async function checkWorkflowStatusOnce() {
+  if (statusRequestInFlight) return null;
+  statusRequestInFlight = true;
+
   try {
     const res = await fetch(STATUS_API, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1498,36 +1505,47 @@ async function checkWorkflowStatusOnce() {
   } catch (err) {
     console.warn("api-status failed", err);
     return null;
+  } finally {
+    statusRequestInFlight = false;
   }
 }
 
 function startStatusPolling() {
   stopStatusPolling();
   statusPollingStartedAt = Date.now();
+  statusPollingAttempts = 0;
 
-  statusPollingTimer = setInterval(async () => {
+  const poll = async () => {
+    statusPollingAttempts += 1;
     const status = await checkWorkflowStatusOnce();
-    if (!status) return;
 
-    if (status.status === "completed") {
-      qs("run-status").textContent = "Workflow เสร็จแล้ว กำลังโหลดข้อมูลล่าสุด...";
-      stopStatusPolling();
-      await loadLiveData();
-      refreshDynamicUI();
-      return;
+    if (status) {
+      const updatedAt = new Date(status.updated_at || status.started_at || 0).getTime();
+      const isNewStatus = !updatedAt || updatedAt >= statusPollingStartedAt - 3000;
+
+      if (status.status === "completed" && isNewStatus) {
+        qs("run-status").textContent = "Workflow เสร็จแล้ว กำลังโหลดข้อมูลล่าสุด...";
+        stopStatusPolling();
+        await loadLiveData();
+        refreshDynamicUI();
+        return;
+      }
+
+      if (status.status === "failed" && isNewStatus) {
+        qs("run-status").textContent = `Workflow ล้มเหลว: ${status.error_message || status.message || "ไม่ทราบสาเหตุ"}`;
+        stopStatusPolling();
+        return;
+      }
     }
 
-    if (status.status === "failed") {
-      qs("run-status").textContent = `Workflow ล้มเหลว: ${status.error_message || status.message || "ไม่ทราบสาเหตุ"}`;
-      stopStatusPolling();
-      return;
-    }
-
-    if (Date.now() - statusPollingStartedAt > 10 * 60 * 1000) {
+    if (Date.now() - statusPollingStartedAt > STATUS_POLL_TIMEOUT_MS) {
       qs("run-status").textContent = "หยุดติดตามสถานะอัตโนมัติแล้ว หาก Workflow ยังไม่จบให้ตรวจใน n8n";
       stopStatusPolling();
     }
-  }, 5000);
+  };
+
+  setTimeout(poll, 3000);
+  statusPollingTimer = setInterval(poll, STATUS_POLL_INTERVAL_MS);
 }
 
 function stopStatusPolling() {
@@ -1555,7 +1573,6 @@ function renderApp() {
 (async function bootstrap() {
   await loadLiveData();
   renderApp();
-  checkWorkflowStatusOnce();
 })();
 </script>
 </body>
