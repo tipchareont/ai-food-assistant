@@ -180,6 +180,11 @@
             <select id="area-select" title="เลือกพื้นที่ของ Dataset ที่มีอยู่แล้ว"></select>
             <p class="hint">ใช้สำหรับกรองข้อมูลที่โหลดเข้ามาแล้วเท่านั้น ไม่ได้สั่ง Scrape ใหม่</p>
           </div>
+          <div>
+            <label>Run History</label>
+            <select id="run-select" title="เลือก Run ที่ต้องการดูย้อนหลัง"></select>
+            <p class="hint">ค่าเริ่มต้นคือ Run ล่าสุด เพื่อไม่ให้ข้อมูลเก่าปนกับผลลัพธ์ล่าสุด</p>
+          </div>
           <div class="dataset-meta">
             <div class="meta-card">
               <span class="label">Loaded Restaurants</span>
@@ -319,19 +324,9 @@ const DASHBOARD_API = `${API_BASE}/api-dashboard`;
 const WEBHOOK_ENDPOINT = `${API_BASE}/api-refresh`;
 const ASK_API = `${API_BASE}/api-ask`;
 const STATUS_API = `${API_BASE}/api-status`;
-const APP_BUILD = 'polling-final-safe-v2';
-const POLL_INTERVAL_MS = 15000;
-const POLL_TIMEOUT_MS = 3 * 60 * 1000;
-const API_TIMEOUT_MS = 20000;
 
 let statusPollingTimer = null;
 let statusPollingStartedAt = 0;
-let refreshRequestInFlight = false;
-let lastRefreshSentAt = 0;
-let statusPollingAttempts = 0;
-let statusRequestInFlight = false;
-const STATUS_POLL_INTERVAL_MS = 15000;
-const STATUS_POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
 let reportData = {
   "project": {
@@ -1058,9 +1053,36 @@ let reportData = {
 
 function getAvailableAreas() {
   const datasetAreas = [...new Set(getDatasetRows().map(r => r.area).filter(Boolean))];
-  const baseAreas = reportData.availableAreas || [];
-  const selected = reportData.project?.area ? [reportData.project.area] : [];
-  return [...new Set([...datasetAreas, ...baseAreas, ...selected].filter(Boolean))];
+  const baseAreas = getDatasetRows().length ? [] : (reportData.availableAreas || []);
+  return ["ทั้งหมด", ...new Set([...datasetAreas, ...baseAreas].filter(Boolean))];
+}
+
+function getAvailableRuns() {
+  const runs = [...new Set(getDatasetRows().map(r => r.runId).filter(Boolean))];
+  return runs.sort((a, b) => String(b).localeCompare(String(a)));
+}
+
+function getLatestRunId() {
+  return getAvailableRuns()[0] || "";
+}
+
+function getSelectedRunId() {
+  const value = qs("run-select")?.value || "latest";
+  if (value === "latest") return getLatestRunId();
+  if (value === "all") return "";
+  return value;
+}
+
+function updateDatasetMeta() {
+  const selectedRunId = getSelectedRunId();
+  const selectedArea = getCurrentArea();
+  const rows = getDatasetRows().filter(r => {
+    const runOk = !selectedRunId || r.runId === selectedRunId;
+    const areaOk = selectedArea === "ทั้งหมด" || r.area === selectedArea;
+    return runOk && areaOk;
+  });
+  if (qs("loaded-count")) qs("loaded-count").textContent = rows.length || "-";
+  if (qs("current-run")) qs("current-run").textContent = selectedRunId || "ทั้งหมด";
 }
 
 const qs = (id) => document.getElementById(id);
@@ -1109,29 +1131,52 @@ function refreshDynamicUI() {
 function initHeader() {
   qs("project-title").textContent = reportData.project.title;
   qs("project-description").textContent = reportData.project.description;
-  qs("area-pill").textContent = `Area: ${reportData.project.area}`;
+  qs("area-pill").textContent = `Area: ${getCurrentArea()}`;
   qs("group-pill").textContent = `Target group: ${reportData.project.targetGroup}`;
   qs("status-badge").textContent = reportData.project.status;
   qs("hero-score").textContent = reportData.summary.topScore;
   qs("hero-recommendation").textContent = reportData.summary.topRecommendation;
-  if (qs("loaded-count")) qs("loaded-count").textContent = reportData.summary.totalRestaurants || getDatasetRows().length || "-";
-  if (qs("current-run")) qs("current-run").textContent = getDatasetRows()[0]?.runId || "-";
-  qs("area-select").innerHTML = getAvailableAreas().map(a => `<option value="${escapeHtml(a)}" ${a === reportData.project.area ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
+  qs("area-select").innerHTML = getAvailableAreas().map(a => `<option value="${escapeHtml(a)}" ${a === "ทั้งหมด" ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
+  qs("run-select").innerHTML = `<option value="latest">Run ล่าสุด</option><option value="all">ทุก Run</option>` + getAvailableRuns().map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
   qs("area-select").addEventListener("change", handleAreaChange);
+  qs("run-select").addEventListener("change", handleRunChange);
+  updateDatasetMeta();
 }
 
 function getCurrentArea() {
-  return qs("area-select")?.value || reportData.project.area;
+  return qs("area-select")?.value || "ทั้งหมด";
 }
 
 function handleAreaChange() {
   const area = getCurrentArea();
   qs("area-pill").textContent = `Area: ${area}`;
-  const hasDataset = getDatasetRows().some(r => (r.area || reportData.project.area) === area);
-  qs("run-status").textContent = hasDataset
-    ? `กำลังแสดง Dataset พื้นที่: ${area}`
-    : `ยังไม่มี Dataset ของพื้นที่ ${area} ให้กรอก Keyword แล้วกดค้นหาพื้นที่ใหม่`;
+  const rows = getFilteredRows();
+  qs("run-status").textContent = rows.length
+    ? `กำลังแสดง Dataset: ${area} (${rows.length} ร้าน)`
+    : `ยังไม่มี Dataset ตาม Filter ที่เลือก ให้กรอก Keyword แล้วกดค้นหาพื้นที่ใหม่`;
+  updateDatasetMeta();
   renderRanking();
+}
+
+function handleRunChange() {
+  updateDatasetMeta();
+  renderTopRecommendationFromFilteredRows();
+  renderTop3();
+  renderRanking();
+}
+
+function renderTopRecommendationFromFilteredRows() {
+  const rows = getFilteredRows().slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+  const top = rows[0] || getDatasetRows().slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  if (!top) {
+    reportData.summary.topScore = "-";
+    reportData.summary.topRecommendation = "-";
+    return;
+  }
+  reportData.summary.topScore = top.total || "-";
+  reportData.summary.topRecommendation = top.restaurant || "-";
+  qs("hero-score").textContent = reportData.summary.topScore;
+  qs("hero-recommendation").textContent = reportData.summary.topRecommendation;
 }
 
 function renderSummary() {
@@ -1200,10 +1245,12 @@ function getFilteredRows() {
   const price = qs("price-filter").value;
   const sort = qs("sort-select").value;
   const selectedArea = getCurrentArea();
+  const selectedRunId = getSelectedRunId();
   let rows = [...getDatasetRows()].filter(r => {
     const hay = `${r.restaurant} ${r.foodType || ""}`.toLowerCase();
-    const rowArea = r.area || reportData.project.area;
-    return rowArea === selectedArea && (!q || hay.includes(q)) && (!tier || r.tier === tier) && (!price || String(r.price) === price);
+    const areaOk = selectedArea === "ทั้งหมด" || r.area === selectedArea;
+    const runOk = !selectedRunId || r.runId === selectedRunId;
+    return runOk && areaOk && (!q || hay.includes(q)) && (!tier || r.tier === tier) && (!price || String(r.price) === price);
   });
   rows.sort((a,b) => {
     if (sort === "total") return Number(b.total) - Number(a.total);
@@ -1231,6 +1278,7 @@ function renderFilters() {
 
 function renderRanking() {
   const rows = getFilteredRows();
+  updateDatasetMeta();
   if (!rows.length) {
     qs("ranking-body").innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:28px;">ยังไม่มีข้อมูลร้านอาหารจาก Live API หรือไม่พบข้อมูลตาม Filter ที่เลือก</td></tr>`;
     return;
@@ -1274,37 +1322,8 @@ function renderEvidence() {
   qs("evidence-grid").innerHTML = groups.map(g => `<article class="card evidence"><dl>${g.map(([dt,dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join("")}</dl></article>`).join("");
 }
 
-
-function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
-
-async function parseApiResponse(res) {
-  const text = await res.text();
-  if (!text || !text.trim()) return { ok: true, empty: true };
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    return { ok: true, raw: text };
-  }
-}
-
 function setupRunWorkflow() {
-  const runButton = qs("run-workflow");
-  if (!runButton || runButton.dataset.bound === "1") return;
-  runButton.dataset.bound = "1";
-
-  runButton.addEventListener("click", async () => {
-    if (refreshRequestInFlight) {
-      qs("run-status").textContent = "กำลังส่งคำสั่งเดิมอยู่ กรุณารอให้ request ก่อนหน้าจบก่อน";
-      return;
-    }
-
-    stopStatusPolling();
-
+  qs("run-workflow").addEventListener("click", async () => {
     const areaInput = qs("refresh-area-input")?.value.trim() || "";
     let keyword = qs("keyword-input").value.trim();
     let targetCount = Number(qs("target-count").value || 20);
@@ -1327,34 +1346,25 @@ function setupRunWorkflow() {
     const payload = {
       area: areaInput,
       keyword,
-      target_count: targetCount,
-      requested_at: new Date().toISOString(),
-      source: "web-ui"
+      target_count: targetCount
     };
 
-    refreshRequestInFlight = true;
-    lastRefreshSentAt = Date.now();
-    runButton.disabled = true;
+    qs("run-workflow").disabled = true;
     qs("run-status").textContent = `กำลังส่งคำสั่งไป n8n: ${keyword} (${targetCount} ร้าน)...`;
 
     try {
-      const res = await fetchWithTimeout(WEBHOOK_ENDPOINT, {
+      const res = await fetch(WEBHOOK_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        cache: "no-store"
-      }, API_TIMEOUT_MS);
-
-      await parseApiResponse(res);
-      if (!res.ok) throw new Error(`api-refresh HTTP ${res.status}`);
-
-      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — รอ Workflow ประมวลผล...`;
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — เริ่มติดตามสถานะ Workflow...`;
       startStatusPolling();
     } catch (err) {
-      stopStatusPolling();
-      qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.name === "AbortError" ? "api-refresh timeout" : err.message}`;
-      runButton.disabled = false;
-      refreshRequestInFlight = false;
+      qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
+    } finally {
+      qs("run-workflow").disabled = false;
     }
   });
 }
@@ -1450,7 +1460,7 @@ function normalizeRestaurant(row) {
   const total = Number(row.total_score || row.total_score_100 || row.total || 0);
   const recommendation = row.recommendation || row.recommendation_tier || (rank <= 3 ? "Top 3" : rank <= 10 ? "Top 10" : "Candidate");
   return {
-    area: row.area || reportData.project.area,
+    area: row.area || "",
     rank,
     restaurant: name,
     restaurantId: String(row.restaurant_id || "").split("_").pop() || row.restaurant_id || "",
@@ -1517,10 +1527,11 @@ async function loadLiveData() {
       evidenceUrl: "#evidence-grid"
     }));
 
-    const runId = dashboard.last_run || restaurants[0]?.runId || "";
+    const runId = dashboard.last_run || getLatestRunId() || restaurants[0]?.runId || "";
+    reportData.project.area = "ทั้งหมด";
     if (runId) reportData.project.status = `Live Data Loaded · ${runId}`;
     const liveAreas = [...new Set(restaurants.map(r => r.area).filter(Boolean))];
-    if (liveAreas.length) reportData.availableAreas = liveAreas;
+    reportData.availableAreas = liveAreas;
     qs("run-status").textContent = `โหลดข้อมูลจริงสำเร็จ: ${restaurants.length} ร้าน`;
   } catch (err) {
     console.warn("Live API load failed, clearing embedded fallback data", err);
@@ -1531,8 +1542,8 @@ async function loadLiveData() {
 
 async function checkWorkflowStatusOnce() {
   try {
-    const res = await fetchWithTimeout(STATUS_API, { cache: "no-store" }, API_TIMEOUT_MS);
-    if (!res.ok) throw new Error(`api-status HTTP ${res.status}`);
+    const res = await fetch(STATUS_API, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     let data = await res.json();
     if (Array.isArray(data)) data = data[0] || {};
     if (data.json) data = data.json;
@@ -1554,38 +1565,28 @@ function startStatusPolling() {
   statusPollingStartedAt = Date.now();
 
   statusPollingTimer = setInterval(async () => {
-    if (!refreshRequestInFlight && !lastRefreshSentAt) {
-      stopStatusPolling();
-      return;
-    }
-
     const status = await checkWorkflowStatusOnce();
+    if (!status) return;
 
-    if (status && status.status === "completed") {
+    if (status.status === "completed") {
       qs("run-status").textContent = "Workflow เสร็จแล้ว กำลังโหลดข้อมูลล่าสุด...";
       stopStatusPolling();
       await loadLiveData();
       refreshDynamicUI();
-      qs("run-workflow").disabled = false;
-      refreshRequestInFlight = false;
       return;
     }
 
-    if (status && status.status === "failed") {
+    if (status.status === "failed") {
       qs("run-status").textContent = `Workflow ล้มเหลว: ${status.error_message || status.message || "ไม่ทราบสาเหตุ"}`;
       stopStatusPolling();
-      qs("run-workflow").disabled = false;
-      refreshRequestInFlight = false;
       return;
     }
 
-    if (Date.now() - statusPollingStartedAt > POLL_TIMEOUT_MS) {
-      qs("run-status").textContent = "หยุดติดตามสถานะอัตโนมัติแล้ว หาก Workflow ยังไม่จบให้ตรวจใน n8n หรือกด Refresh หน้าเว็บหลัง Workflow เสร็จ";
+    if (Date.now() - statusPollingStartedAt > 10 * 60 * 1000) {
+      qs("run-status").textContent = "หยุดติดตามสถานะอัตโนมัติแล้ว หาก Workflow ยังไม่จบให้ตรวจใน n8n";
       stopStatusPolling();
-      qs("run-workflow").disabled = false;
-      refreshRequestInFlight = false;
     }
-  }, POLL_INTERVAL_MS);
+  }, 5000);
 }
 
 function stopStatusPolling() {
@@ -1613,7 +1614,7 @@ function renderApp() {
 (async function bootstrap() {
   await loadLiveData();
   renderApp();
-  console.info('AI Food Assistant build:', APP_BUILD);
+  checkWorkflowStatusOnce();
 })();
 </script>
 </body>
