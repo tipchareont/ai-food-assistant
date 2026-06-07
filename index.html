@@ -319,9 +319,15 @@ const DASHBOARD_API = `${API_BASE}/api-dashboard`;
 const WEBHOOK_ENDPOINT = `${API_BASE}/api-refresh`;
 const ASK_API = `${API_BASE}/api-ask`;
 const STATUS_API = `${API_BASE}/api-status`;
+const APP_BUILD = 'polling-final-safe-v2';
+const POLL_INTERVAL_MS = 15000;
+const POLL_TIMEOUT_MS = 3 * 60 * 1000;
+const API_TIMEOUT_MS = 20000;
 
 let statusPollingTimer = null;
 let statusPollingStartedAt = 0;
+let refreshRequestInFlight = false;
+let lastRefreshSentAt = 0;
 let statusPollingAttempts = 0;
 let statusRequestInFlight = false;
 const STATUS_POLL_INTERVAL_MS = 15000;
@@ -1268,8 +1274,37 @@ function renderEvidence() {
   qs("evidence-grid").innerHTML = groups.map(g => `<article class="card evidence"><dl>${g.map(([dt,dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join("")}</dl></article>`).join("");
 }
 
+
+function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
+async function parseApiResponse(res) {
+  const text = await res.text();
+  if (!text || !text.trim()) return { ok: true, empty: true };
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return { ok: true, raw: text };
+  }
+}
+
 function setupRunWorkflow() {
-  qs("run-workflow").addEventListener("click", async () => {
+  const runButton = qs("run-workflow");
+  if (!runButton || runButton.dataset.bound === "1") return;
+  runButton.dataset.bound = "1";
+
+  runButton.addEventListener("click", async () => {
+    if (refreshRequestInFlight) {
+      qs("run-status").textContent = "กำลังส่งคำสั่งเดิมอยู่ กรุณารอให้ request ก่อนหน้าจบก่อน";
+      return;
+    }
+
+    stopStatusPolling();
+
     const areaInput = qs("refresh-area-input")?.value.trim() || "";
     let keyword = qs("keyword-input").value.trim();
     let targetCount = Number(qs("target-count").value || 20);
@@ -1292,25 +1327,34 @@ function setupRunWorkflow() {
     const payload = {
       area: areaInput,
       keyword,
-      target_count: targetCount
+      target_count: targetCount,
+      requested_at: new Date().toISOString(),
+      source: "web-ui"
     };
 
-    qs("run-workflow").disabled = true;
+    refreshRequestInFlight = true;
+    lastRefreshSentAt = Date.now();
+    runButton.disabled = true;
     qs("run-status").textContent = `กำลังส่งคำสั่งไป n8n: ${keyword} (${targetCount} ร้าน)...`;
 
     try {
-      const res = await fetch(WEBHOOK_ENDPOINT, {
+      const res = await fetchWithTimeout(WEBHOOK_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — เริ่มติดตามสถานะ Workflow...`;
+        body: JSON.stringify(payload),
+        cache: "no-store"
+      }, API_TIMEOUT_MS);
+
+      await parseApiResponse(res);
+      if (!res.ok) throw new Error(`api-refresh HTTP ${res.status}`);
+
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — รอ Workflow ประมวลผล...`;
       startStatusPolling();
     } catch (err) {
-      qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
-    } finally {
-      qs("run-workflow").disabled = false;
+      stopStatusPolling();
+      qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.name === "AbortError" ? "api-refresh timeout" : err.message}`;
+      runButton.disabled = false;
+      refreshRequestInFlight = false;
     }
   });
 }
@@ -1486,12 +1530,9 @@ async function loadLiveData() {
 }
 
 async function checkWorkflowStatusOnce() {
-  if (statusRequestInFlight) return null;
-  statusRequestInFlight = true;
-
   try {
-    const res = await fetch(STATUS_API, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetchWithTimeout(STATUS_API, { cache: "no-store" }, API_TIMEOUT_MS);
+    if (!res.ok) throw new Error(`api-status HTTP ${res.status}`);
     let data = await res.json();
     if (Array.isArray(data)) data = data[0] || {};
     if (data.json) data = data.json;
@@ -1505,47 +1546,46 @@ async function checkWorkflowStatusOnce() {
   } catch (err) {
     console.warn("api-status failed", err);
     return null;
-  } finally {
-    statusRequestInFlight = false;
   }
 }
 
 function startStatusPolling() {
   stopStatusPolling();
   statusPollingStartedAt = Date.now();
-  statusPollingAttempts = 0;
 
-  const poll = async () => {
-    statusPollingAttempts += 1;
+  statusPollingTimer = setInterval(async () => {
+    if (!refreshRequestInFlight && !lastRefreshSentAt) {
+      stopStatusPolling();
+      return;
+    }
+
     const status = await checkWorkflowStatusOnce();
 
-    if (status) {
-      const updatedAt = new Date(status.updated_at || status.started_at || 0).getTime();
-      const isNewStatus = !updatedAt || updatedAt >= statusPollingStartedAt - 3000;
-
-      if (status.status === "completed" && isNewStatus) {
-        qs("run-status").textContent = "Workflow เสร็จแล้ว กำลังโหลดข้อมูลล่าสุด...";
-        stopStatusPolling();
-        await loadLiveData();
-        refreshDynamicUI();
-        return;
-      }
-
-      if (status.status === "failed" && isNewStatus) {
-        qs("run-status").textContent = `Workflow ล้มเหลว: ${status.error_message || status.message || "ไม่ทราบสาเหตุ"}`;
-        stopStatusPolling();
-        return;
-      }
-    }
-
-    if (Date.now() - statusPollingStartedAt > STATUS_POLL_TIMEOUT_MS) {
-      qs("run-status").textContent = "หยุดติดตามสถานะอัตโนมัติแล้ว หาก Workflow ยังไม่จบให้ตรวจใน n8n";
+    if (status && status.status === "completed") {
+      qs("run-status").textContent = "Workflow เสร็จแล้ว กำลังโหลดข้อมูลล่าสุด...";
       stopStatusPolling();
+      await loadLiveData();
+      refreshDynamicUI();
+      qs("run-workflow").disabled = false;
+      refreshRequestInFlight = false;
+      return;
     }
-  };
 
-  setTimeout(poll, 3000);
-  statusPollingTimer = setInterval(poll, STATUS_POLL_INTERVAL_MS);
+    if (status && status.status === "failed") {
+      qs("run-status").textContent = `Workflow ล้มเหลว: ${status.error_message || status.message || "ไม่ทราบสาเหตุ"}`;
+      stopStatusPolling();
+      qs("run-workflow").disabled = false;
+      refreshRequestInFlight = false;
+      return;
+    }
+
+    if (Date.now() - statusPollingStartedAt > POLL_TIMEOUT_MS) {
+      qs("run-status").textContent = "หยุดติดตามสถานะอัตโนมัติแล้ว หาก Workflow ยังไม่จบให้ตรวจใน n8n หรือกด Refresh หน้าเว็บหลัง Workflow เสร็จ";
+      stopStatusPolling();
+      qs("run-workflow").disabled = false;
+      refreshRequestInFlight = false;
+    }
+  }, POLL_INTERVAL_MS);
 }
 
 function stopStatusPolling() {
@@ -1573,6 +1613,7 @@ function renderApp() {
 (async function bootstrap() {
   await loadLiveData();
   renderApp();
+  console.info('AI Food Assistant build:', APP_BUILD);
 })();
 </script>
 </body>
