@@ -119,6 +119,16 @@
     .warn { background:var(--amberSoft); color:#92400e; border:1px solid #fde68a; padding:10px 12px; border-radius:14px; font-size:.88rem; }
     footer { margin-top:30px; color:var(--muted); font-size:.86rem; text-align:center; }
 
+    .app-modal-backdrop { position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; padding:18px; background:rgba(15,23,42,.45); backdrop-filter:blur(3px); }
+    .app-modal-backdrop.is-open { display:flex; }
+    .app-modal { width:min(100%,460px); background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:0 24px 80px rgba(15,23,42,.22); overflow:hidden; }
+    .app-modal-head { padding:20px 22px 10px; display:flex; gap:12px; align-items:flex-start; }
+    .app-modal-icon { width:42px; height:42px; flex:0 0 auto; border-radius:999px; display:flex; align-items:center; justify-content:center; background:var(--amberSoft); color:var(--amber); font-weight:950; font-size:1.2rem; }
+    .app-modal-title { margin:0; font-size:1.12rem; font-weight:950; letter-spacing:-.02em; }
+    .app-modal-body { padding:0 22px 18px 76px; color:var(--muted); font-size:.95rem; }
+    .app-modal-actions { padding:14px 22px 20px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--line); background:var(--surface2); }
+    .app-modal-actions button { min-width:104px; }
+
     .technical-section { margin-top:22px; }
     .tech-details { padding:0; overflow:hidden; box-shadow:none; }
     .tech-details summary { list-style:none; cursor:pointer; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); font-weight:850; }
@@ -258,7 +268,7 @@
         <table>
           <thead>
             <tr>
-              <th class="num">Rank</th><th>Area</th><th>Restaurant</th><th>Type</th><th class="num">Rating</th><th class="num">Reviews</th>
+              <th class="num">No.</th><th>Area</th><th>Restaurant</th><th>Type</th><th class="num">Rank</th><th class="num">Rating</th><th class="num">Reviews</th>
               <th class="num">Group</th><th class="num">Price</th><th class="num">Travel</th><th class="num">Completeness</th><th class="num">Unique</th><th class="num">Total</th><th>Tier</th><th>Map</th>
             </tr>
           </thead>
@@ -315,6 +325,22 @@
     </section>
 
     <footer>Static report ready for Vercel. Dataset Area filters existing data; New Scrape Request triggers n8n api-refresh; Ask AI Box triggers api-ask.</footer>
+
+  <div class="app-modal-backdrop" id="app-modal" role="dialog" aria-modal="true" aria-labelledby="app-modal-title" aria-hidden="true">
+    <div class="app-modal">
+      <div class="app-modal-head">
+        <div class="app-modal-icon">!</div>
+        <div>
+          <h3 class="app-modal-title" id="app-modal-title">พื้นที่นี้มีข้อมูลอยู่แล้ว</h3>
+        </div>
+      </div>
+      <div class="app-modal-body" id="app-modal-message">ระบบใช้งานได้ปกติ แต่พื้นที่นี้มีข้อมูลอยู่ใน Database แล้ว กรุณาลองเลือกพื้นที่อื่น หรือเคลียร์ข้อมูลเก่าก่อนสั่ง Scrape ซ้ำ</div>
+      <div class="app-modal-actions">
+        <button type="button" id="app-modal-close">เข้าใจแล้ว</button>
+      </div>
+    </div>
+  </div>
+
   </main>
 
 <script>
@@ -1101,6 +1127,43 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
 }
 
+function showAppModal(title, message) {
+  const modal = qs("app-modal");
+  const titleEl = qs("app-modal-title");
+  const messageEl = qs("app-modal-message");
+  const closeBtn = qs("app-modal-close");
+  if (!modal || !titleEl || !messageEl || !closeBtn) {
+    window.alert(message);
+    return;
+  }
+  titleEl.textContent = title || "แจ้งเตือน";
+  messageEl.textContent = message || "กรุณาตรวจสอบข้อมูลอีกครั้ง";
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  closeBtn.focus();
+}
+
+function hideAppModal() {
+  const modal = qs("app-modal");
+  if (!modal) return;
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function setupAppModal() {
+  const modal = qs("app-modal");
+  const closeBtn = qs("app-modal-close");
+  if (!modal || !closeBtn || modal.dataset.bound === "1") return;
+  modal.dataset.bound = "1";
+  closeBtn.addEventListener("click", hideAppModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) hideAppModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && modal.classList.contains("is-open")) hideAppModal();
+  });
+}
+
 
 function clearLiveData(message = "ยังไม่มีข้อมูลจาก Live API") {
   reportData.summary.totalRestaurants = "0";
@@ -1280,16 +1343,17 @@ function renderRanking() {
   const rows = getFilteredRows();
   updateDatasetMeta();
   if (!rows.length) {
-    qs("ranking-body").innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:28px;">ยังไม่มีข้อมูลร้านอาหารจาก Live API หรือไม่พบข้อมูลตาม Filter ที่เลือก</td></tr>`;
+    qs("ranking-body").innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:28px;">ยังไม่มีข้อมูลร้านอาหารจาก Live API หรือไม่พบข้อมูลตาม Filter ที่เลือก</td></tr>`;
     return;
   }
 
-  qs("ranking-body").innerHTML = rows.map(r => `
+  qs("ranking-body").innerHTML = rows.map((r, index) => `
     <tr>
-      <td class="num">${r.rank}</td>
+      <td class="num">${index + 1}</td>
       <td><span class="tier candidate">${escapeHtml(r.area || "-")}</span></td>
       <td><strong>${escapeHtml(r.restaurant)}</strong><br><span class="hint">${escapeHtml(r.restaurantId || "")}</span></td>
       <td>${escapeHtml(r.foodType || "-")}</td>
+      <td class="num">${r.rank}</td>
       <td class="num">${r.rating ?? "-"}</td>
       <td class="num">${fmt(r.reviews)}</td>
       <td class="num">${r.group}</td>
@@ -1347,8 +1411,8 @@ function setupRunWorkflow() {
     const normalizeArea = (value) => String(value || "").trim().toLowerCase();
     const duplicatedArea = getDatasetRows().some(r => normalizeArea(r.area) === normalizeArea(areaInput));
     if (duplicatedArea) {
-      const message = `มีข้อมูลพื้นที่ "${areaInput}" อยู่ใน Database แล้ว กรุณาเคลียร์ข้อมูลเก่าของพื้นที่นี้ออกก่อน จึงจะสั่ง Scrape ซ้ำได้`;
-      window.alert(message);
+      const message = `ระบบใช้งานได้ปกติ แต่พื้นที่ "${areaInput}" มีข้อมูลอยู่ใน Database แล้ว กรุณาลองเลือกพื้นที่อื่น หรือเคลียร์ข้อมูลเก่าของพื้นที่นี้ออกก่อน จึงจะสั่ง Scrape ซ้ำได้`;
+      showAppModal("พื้นที่นี้มีข้อมูลอยู่แล้ว", message);
       qs("run-status").textContent = message;
       return;
     }
@@ -1607,6 +1671,7 @@ function stopStatusPolling() {
 }
 
 function renderApp() {
+  setupAppModal();
   initHeader();
   renderSummary();
   renderWorkflow();
