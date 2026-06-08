@@ -85,15 +85,30 @@
     .note { padding:12px 13px; border-radius:14px; background:var(--surface2); color:var(--muted); font-size:.9rem; }
     .note strong { color:var(--text); }
     .actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:auto; }
-    .toolbar { display:grid; grid-template-columns:1.1fr .8fr .8fr .8fr; gap:10px; padding:14px; margin-bottom:12px; }
+    .toolbar { display:grid; grid-template-columns:1.1fr .75fr .75fr .75fr .75fr; gap:10px; padding:14px; margin-bottom:12px; }
     .table-wrap { overflow:auto; max-height:720px; }
     .table-wrap::-webkit-scrollbar { height:12px; width:12px; }
     .table-wrap::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; border:3px solid #fff; }
     .table-wrap::-webkit-scrollbar-track { background:#f8fafc; }
-    table { width:100%; min-width:980px; border-collapse:collapse; font-size:.9rem; }
-    th,td { padding:13px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+    table { width:100%; min-width:1180px; border-collapse:collapse; font-size:.9rem; table-layout:fixed; }
+    th,td { padding:13px 10px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
     th { position:sticky; top:0; background:#f8fafc; color:#334155; font-size:.76rem; font-weight:900; white-space:nowrap; z-index:1; }
-    td.num,th.num { text-align:right; white-space:nowrap; }
+    td.num,th.num { text-align:right; white-space:nowrap; padding-left:6px; padding-right:6px; }
+    .restaurant-cell strong { display:block; max-width:100%; overflow-wrap:anywhere; word-break:normal; }
+    .area-cell .tier { max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    .map-cell .btn { min-width:64px; padding-left:12px; padding-right:12px; }
+    col.col-no { width:54px; }
+    col.col-area { width:92px; }
+    col.col-restaurant { width:270px; }
+    col.col-type { width:145px; }
+    col.col-rank { width:54px; }
+    col.col-rating { width:62px; }
+    col.col-reviews { width:84px; }
+    col.col-score-sm { width:70px; }
+    col.col-score-wide { width:96px; }
+    col.col-total { width:86px; }
+    col.col-tier { width:82px; }
+    col.col-map { width:86px; }
     tbody tr:hover { background:#f8fafc; }
     tbody tr:nth-child(-n+3) { background:linear-gradient(90deg, rgba(220,252,231,.58), rgba(255,255,255,0)); }
     .rank-badge { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:28px; border-radius:999px; background:var(--surface2); color:var(--muted); font-weight:900; }
@@ -255,6 +270,7 @@
       <div class="section-head"><div><h2>Restaurant Dataset</h2><p>แสดงข้อมูลร้านอาหารทั้งหมดใน Dataset ปัจจุบัน กล่องตารางแสดงทีละประมาณ 10 รายการ และเลื่อนดูรายการที่เหลือได้</p></div></div>
       <div class="panel toolbar">
         <input id="search-input" placeholder="ค้นหาร้าน / ประเภทอาหาร">
+        <select id="table-area-filter"><option value="">Area: ทุกพื้นที่</option></select>
         <select id="tier-filter"><option value="">Tier: ทั้งหมด</option></select>
         <select id="price-filter"><option value="">Price score: ทั้งหมด</option></select>
         <select id="sort-select">
@@ -266,6 +282,23 @@
       </div>
       <div class="panel table-wrap">
         <table>
+          <colgroup>
+            <col class="col-no">
+            <col class="col-area">
+            <col class="col-restaurant">
+            <col class="col-type">
+            <col class="col-rank">
+            <col class="col-rating">
+            <col class="col-reviews">
+            <col class="col-score-sm">
+            <col class="col-score-sm">
+            <col class="col-score-sm">
+            <col class="col-score-wide">
+            <col class="col-score-sm">
+            <col class="col-total">
+            <col class="col-tier">
+            <col class="col-map">
+          </colgroup>
           <thead>
             <tr>
               <th class="num">No.</th><th>Area</th><th>Restaurant</th><th>Type</th><th class="num">Rank</th><th class="num">Rating</th><th class="num">Reviews</th>
@@ -1302,12 +1335,16 @@ function getDatasetRows() {
   return reportData.allRestaurants || reportData.top10 || [];
 }
 
+function getCurrentTableArea() {
+  return qs("table-area-filter")?.value || "";
+}
+
 function getFilteredRows() {
   const q = qs("search-input").value.trim().toLowerCase();
   const tier = qs("tier-filter").value;
   const price = qs("price-filter").value;
   const sort = qs("sort-select").value;
-  const selectedArea = getCurrentArea();
+  const selectedArea = getCurrentTableArea();
   const selectedRunId = getSelectedRunId();
   let rows = [...getDatasetRows()].filter(r => {
     const hay = `${r.restaurant} ${r.foodType || ""}`.toLowerCase();
@@ -1325,12 +1362,14 @@ function getFilteredRows() {
 }
 
 function renderFilters() {
+  const tableAreas = [...new Set(getDatasetRows().map(r => r.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b), "th"));
   const tiers = [...new Set(getDatasetRows().map(r => r.tier).filter(Boolean))];
   const prices = [...new Set(getDatasetRows().map(r => String(r.price)).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  qs("table-area-filter").innerHTML = `<option value="">Area: ทุกพื้นที่</option>` + tableAreas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
   qs("tier-filter").innerHTML = `<option value="">Tier: ทั้งหมด</option>` + tiers.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
   qs("price-filter").innerHTML = `<option value="">Price score: ทั้งหมด</option>` + prices.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
 
-  ["search-input","tier-filter","price-filter","sort-select"].forEach(id => {
+  ["search-input","table-area-filter","tier-filter","price-filter","sort-select"].forEach(id => {
     const el = qs(id);
     if (!el.dataset.bound) {
       el.addEventListener("input", renderRanking);
@@ -1350,8 +1389,8 @@ function renderRanking() {
   qs("ranking-body").innerHTML = rows.map((r, index) => `
     <tr>
       <td class="num">${index + 1}</td>
-      <td><span class="tier candidate">${escapeHtml(r.area || "-")}</span></td>
-      <td><strong>${escapeHtml(r.restaurant)}</strong><br><span class="hint">${escapeHtml(r.restaurantId || "")}</span></td>
+      <td class="area-cell"><span class="tier candidate">${escapeHtml(r.area || "-")}</span></td>
+      <td class="restaurant-cell"><strong>${escapeHtml(r.restaurant)}</strong><br><span class="hint">${escapeHtml(r.restaurantId || "")}</span></td>
       <td>${escapeHtml(r.foodType || "-")}</td>
       <td class="num">${r.rank}</td>
       <td class="num">${r.rating ?? "-"}</td>
@@ -1363,7 +1402,7 @@ function renderRanking() {
       <td class="num">${r.uniqueness}</td>
       <td class="num"><span class="score-pill">${r.total}</span></td>
       <td><span class="tier">${escapeHtml(r.tier)}</span></td>
-      <td><a class="btn secondary" href="${escapeHtml(r.googleMapsUrl || "#")}" target="_blank" rel="noopener">Map</a></td>
+      <td class="map-cell"><a class="btn secondary" href="${escapeHtml(r.googleMapsUrl || "#")}" target="_blank" rel="noopener">Map</a></td>
     </tr>
   `).join("");
 }
