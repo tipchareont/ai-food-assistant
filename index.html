@@ -183,7 +183,7 @@
           <div>
             <label>Run History</label>
             <select id="run-select" title="เลือก Run ที่ต้องการดูย้อนหลัง"></select>
-            <p class="hint">ค่าเริ่มต้นคือ Run ล่าสุด เพื่อไม่ให้ข้อมูลเก่าปนกับผลลัพธ์ล่าสุด</p>
+            <p class="hint">ค่าเริ่มต้นคือ ทุก Run เพื่อแสดงรายการทั้งหมด และเลือก Run ย้อนหลังได้</p>
           </div>
           <div class="dataset-meta">
             <div class="meta-card">
@@ -258,7 +258,7 @@
         <table>
           <thead>
             <tr>
-              <th class="num">Rank</th><th>Restaurant</th><th>Type</th><th class="num">Rating</th><th class="num">Reviews</th>
+              <th class="num">Rank</th><th>Area</th><th>Restaurant</th><th>Type</th><th class="num">Rating</th><th class="num">Reviews</th>
               <th class="num">Group</th><th class="num">Price</th><th class="num">Travel</th><th class="num">Completeness</th><th class="num">Unique</th><th class="num">Total</th><th>Tier</th><th>Map</th>
             </tr>
           </thead>
@@ -1067,7 +1067,7 @@ function getLatestRunId() {
 }
 
 function getSelectedRunId() {
-  const value = qs("run-select")?.value || "latest";
+  const value = qs("run-select")?.value || "all";
   if (value === "latest") return getLatestRunId();
   if (value === "all") return "";
   return value;
@@ -1137,7 +1137,7 @@ function initHeader() {
   qs("hero-score").textContent = reportData.summary.topScore;
   qs("hero-recommendation").textContent = reportData.summary.topRecommendation;
   qs("area-select").innerHTML = getAvailableAreas().map(a => `<option value="${escapeHtml(a)}" ${a === "ทั้งหมด" ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
-  qs("run-select").innerHTML = `<option value="latest">Run ล่าสุด</option><option value="all">ทุก Run</option>` + getAvailableRuns().map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  qs("run-select").innerHTML = `<option value="all" selected>ทุก Run / ทุกรายการ</option><option value="latest">Run ล่าสุด</option>` + getAvailableRuns().map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
   qs("area-select").addEventListener("change", handleAreaChange);
   qs("run-select").addEventListener("change", handleRunChange);
   updateDatasetMeta();
@@ -1280,13 +1280,14 @@ function renderRanking() {
   const rows = getFilteredRows();
   updateDatasetMeta();
   if (!rows.length) {
-    qs("ranking-body").innerHTML = `<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:28px;">ยังไม่มีข้อมูลร้านอาหารจาก Live API หรือไม่พบข้อมูลตาม Filter ที่เลือก</td></tr>`;
+    qs("ranking-body").innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:28px;">ยังไม่มีข้อมูลร้านอาหารจาก Live API หรือไม่พบข้อมูลตาม Filter ที่เลือก</td></tr>`;
     return;
   }
 
   qs("ranking-body").innerHTML = rows.map(r => `
     <tr>
       <td class="num">${r.rank}</td>
+      <td><span class="tier candidate">${escapeHtml(r.area || "-")}</span></td>
       <td><strong>${escapeHtml(r.restaurant)}</strong><br><span class="hint">${escapeHtml(r.restaurantId || "")}</span></td>
       <td>${escapeHtml(r.foodType || "-")}</td>
       <td class="num">${r.rating ?? "-"}</td>
@@ -1342,6 +1343,15 @@ function setupRunWorkflow() {
     if (!Number.isFinite(targetCount) || targetCount < 1) targetCount = 20;
     if (targetCount > 100) targetCount = 100;
     qs("target-count").value = targetCount;
+
+    const normalizeArea = (value) => String(value || "").trim().toLowerCase();
+    const duplicatedArea = getDatasetRows().some(r => normalizeArea(r.area) === normalizeArea(areaInput));
+    if (duplicatedArea) {
+      const message = `มีข้อมูลพื้นที่ "${areaInput}" อยู่ใน Database แล้ว กรุณาเคลียร์ข้อมูลเก่าของพื้นที่นี้ออกก่อน จึงจะสั่ง Scrape ซ้ำได้`;
+      window.alert(message);
+      qs("run-status").textContent = message;
+      return;
+    }
 
     const payload = {
       area: areaInput,
