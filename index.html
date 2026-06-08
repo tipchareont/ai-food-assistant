@@ -270,7 +270,7 @@
       <div class="section-head"><div><h2>Restaurant Dataset</h2><p>แสดงข้อมูลร้านอาหารทั้งหมดใน Dataset ปัจจุบัน กล่องตารางแสดงทีละประมาณ 10 รายการ และเลื่อนดูรายการที่เหลือได้</p></div></div>
       <div class="panel toolbar">
         <input id="search-input" placeholder="ค้นหาร้าน / ประเภทอาหาร">
-        <select id="table-area-filter"><option value="">Area: ทุกพื้นที่</option></select>
+        <select id="table-area-filter"><option value="__all__">Area: ทุกพื้นที่</option></select>
         <select id="tier-filter"><option value="">Tier: ทั้งหมด</option></select>
         <select id="price-filter"><option value="">Price score: ทั้งหมด</option></select>
         <select id="sort-select">
@@ -1137,7 +1137,7 @@ function updateDatasetMeta() {
   const selectedArea = getCurrentArea();
   const rows = getDatasetRows().filter(r => {
     const runOk = !selectedRunId || r.runId === selectedRunId;
-    const areaOk = selectedArea === "ทั้งหมด" || r.area === selectedArea;
+    const areaOk = !selectedArea || selectedArea === "__all__" || selectedArea === "ทั้งหมด" || r.area === selectedArea;
     return runOk && areaOk;
   });
   if (qs("loaded-count")) qs("loaded-count").textContent = rows.length || "-";
@@ -1336,7 +1336,7 @@ function getDatasetRows() {
 }
 
 function getCurrentTableArea() {
-  return qs("table-area-filter")?.value || "";
+  return qs("table-area-filter")?.value || "__all__";
 }
 
 function getFilteredRows() {
@@ -1348,7 +1348,7 @@ function getFilteredRows() {
   const selectedRunId = getSelectedRunId();
   let rows = [...getDatasetRows()].filter(r => {
     const hay = `${r.restaurant} ${r.foodType || ""}`.toLowerCase();
-    const areaOk = selectedArea === "ทั้งหมด" || r.area === selectedArea;
+    const areaOk = !selectedArea || selectedArea === "__all__" || selectedArea === "ทั้งหมด" || r.area === selectedArea;
     const runOk = !selectedRunId || r.runId === selectedRunId;
     return runOk && areaOk && (!q || hay.includes(q)) && (!tier || r.tier === tier) && (!price || String(r.price) === price);
   });
@@ -1365,14 +1365,15 @@ function renderFilters() {
   const tableAreas = [...new Set(getDatasetRows().map(r => r.area).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b), "th"));
   const tiers = [...new Set(getDatasetRows().map(r => r.tier).filter(Boolean))];
   const prices = [...new Set(getDatasetRows().map(r => String(r.price)).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
-  qs("table-area-filter").innerHTML = `<option value="">Area: ทุกพื้นที่</option>` + tableAreas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
+  qs("table-area-filter").innerHTML = `<option value="__all__">Area: ทุกพื้นที่</option>` + tableAreas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
   qs("tier-filter").innerHTML = `<option value="">Tier: ทั้งหมด</option>` + tiers.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
   qs("price-filter").innerHTML = `<option value="">Price score: ทั้งหมด</option>` + prices.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
 
   ["search-input","table-area-filter","tier-filter","price-filter","sort-select"].forEach(id => {
     const el = qs(id);
     if (!el.dataset.bound) {
-      el.addEventListener("input", renderRanking);
+      const eventName = id === "search-input" ? "input" : "change";
+      el.addEventListener(eventName, renderRanking);
       el.dataset.bound = "1";
     }
   });
