@@ -370,6 +370,7 @@
       </div>
       <div class="app-modal-body" id="app-modal-message">ระบบใช้งานได้ปกติ แต่พื้นที่นี้มีข้อมูลอยู่ใน Database แล้ว กรุณาลองเลือกพื้นที่อื่น หรือเคลียร์ข้อมูลเก่าก่อนสั่ง Scrape ซ้ำ</div>
       <div class="app-modal-actions">
+        <button type="button" id="app-modal-refresh" style="display:none;">รีเฟรชหน้าเว็บ</button>
         <button type="button" id="app-modal-close">เข้าใจแล้ว</button>
       </div>
     </div>
@@ -389,6 +390,7 @@ let statusPollingTimer = null;
 let statusPollingStartedAt = 0;
 let scrapeTimer = null;
 let scrapeStartedAt = 0;
+let longRunWarningTimer = null;
 
 let reportData = {
   "project": {
@@ -1163,20 +1165,28 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (m) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
 }
 
-function showAppModal(title, message) {
+function showAppModal(title, message, options = {}) {
   const modal = qs("app-modal");
   const titleEl = qs("app-modal-title");
   const messageEl = qs("app-modal-message");
   const closeBtn = qs("app-modal-close");
+  const refreshBtn = qs("app-modal-refresh");
   if (!modal || !titleEl || !messageEl || !closeBtn) {
     window.alert(message);
     return;
   }
   titleEl.textContent = title || "แจ้งเตือน";
   messageEl.textContent = message || "กรุณาตรวจสอบข้อมูลอีกครั้ง";
+
+  if (refreshBtn) {
+    refreshBtn.style.display = options.showRefresh ? "inline-flex" : "none";
+    refreshBtn.onclick = options.showRefresh ? () => window.location.reload() : null;
+  }
+
+  closeBtn.style.display = options.hideClose ? "none" : "inline-flex";
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
-  closeBtn.focus();
+  (options.showRefresh && refreshBtn ? refreshBtn : closeBtn).focus();
 }
 
 function hideAppModal() {
@@ -1442,7 +1452,7 @@ function updateScrapeTimerNote() {
   const note = qs("run-timer-note");
   if (!note || !scrapeStartedAt) return;
   const elapsed = Date.now() - scrapeStartedAt;
-  note.textContent = `ใช้เวลาไปแล้ว ${formatElapsed(elapsed)} นาที · ปกติ Flow จะจบภายในประมาณ 2 นาที หากเกินกว่านี้อาจติด Limit ของ AI / Apify หรือคิวประมวลผล`;
+  note.textContent = `ใช้เวลาไปแล้ว ${formatElapsed(elapsed)} นาที · ปกติ Flow จะจบภายในประมาณ 5 นาที หากเกินกว่านี้อาจติด Limit ของ AI / Apify หรือคิวประมวลผล`;
 }
 
 function startScrapeTimer() {
@@ -1457,6 +1467,25 @@ function stopScrapeTimer() {
     clearInterval(scrapeTimer);
     scrapeTimer = null;
   }
+}
+
+
+function clearLongRunWarningTimer() {
+  if (longRunWarningTimer) {
+    clearTimeout(longRunWarningTimer);
+    longRunWarningTimer = null;
+  }
+}
+
+function scheduleLongRunWarning() {
+  clearLongRunWarningTimer();
+  longRunWarningTimer = setTimeout(() => {
+    showAppModal(
+      "ใช้เวลาประมวลผลนานกว่าปกติ",
+      "ระบบอาจยังอยู่ระหว่างประมวลผลข้อมูล โดยปกติ Workflow จะใช้เวลาประมาณ 5 นาที หากขณะนี้เกิน 5 นาทีแล้ว กรุณาลองรีเฟรชหน้าเว็บเพื่อตรวจสอบผลลัพธ์ล่าสุด หากยังไม่พบข้อมูล อาจเกิดจาก AI / Apify / Google Maps ตอบกลับช้ากว่าปกติ หรือ Workflow อยู่ระหว่างรอคิวประมวลผล",
+      { showRefresh: true }
+    );
+  }, 5 * 60 * 1000);
 }
 
 function setupRunWorkflow() {
@@ -1510,11 +1539,13 @@ function setupRunWorkflow() {
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — ระบบกำลังทำงานอยู่ กรุณารอประมาณ 2 นาทีแล้วรีเฟรชหน้าเว็บเพื่อดูข้อมูลล่าสุด`;
-      qs("run-timer-note").textContent = `ใช้เวลาไปแล้ว 0:00 นาที · ปกติ Flow จะจบภายในประมาณ 2 นาที หากเกินกว่านี้อาจติด Limit ของ AI / Apify หรือคิวประมวลผล`;
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — ระบบกำลังทำงานอยู่ กรุณารอประมาณ 5 นาทีแล้วรีเฟรชหน้าเว็บเพื่อตรวจสอบข้อมูลล่าสุด`;
+      qs("run-timer-note").textContent = `ใช้เวลาไปแล้ว 0:00 นาที · ปกติ Flow จะจบภายในประมาณ 5 นาที หากเกินกว่านี้ระบบจะแจ้งให้ลองตรวจสอบข้อมูลล่าสุด`;
       stopStatusPolling();
+      scheduleLongRunWarning();
     } catch (err) {
       stopScrapeTimer();
+      clearLongRunWarningTimer();
       qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
       qs("run-timer-note").textContent = "ส่งคำสั่งไม่สำเร็จ ยังไม่ได้เริ่มนับเวลา Workflow";
       runButton.disabled = false;
