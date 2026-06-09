@@ -247,6 +247,7 @@
           </div>
           <button id="run-workflow" class="wide">ค้นหาพื้นที่ใหม่</button>
           <p class="status wide" id="run-status">พร้อมส่งคำสั่งค้นหาพื้นที่ใหม่</p>
+          <p class="status wide" id="run-timer-note" style="color:#94a3b8;font-size:.82rem;">หลังเริ่มค้นหา ระบบจะแสดงเวลาที่ใช้ไปตรงนี้</p>
         </div>
       </div>
     </section>
@@ -386,6 +387,8 @@ const STATUS_API = `${API_BASE}/api-status`;
 
 let statusPollingTimer = null;
 let statusPollingStartedAt = 0;
+let scrapeTimer = null;
+let scrapeStartedAt = 0;
 
 let reportData = {
   "project": {
@@ -1427,8 +1430,40 @@ function renderEvidence() {
   qs("evidence-grid").innerHTML = groups.map(g => `<article class="card evidence"><dl>${g.map(([dt,dd]) => `<div><dt>${escapeHtml(dt)}</dt><dd>${escapeHtml(dd)}</dd></div>`).join("")}</dl></article>`).join("");
 }
 
+
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateScrapeTimerNote() {
+  const note = qs("run-timer-note");
+  if (!note || !scrapeStartedAt) return;
+  const elapsed = Date.now() - scrapeStartedAt;
+  note.textContent = `ใช้เวลาไปแล้ว ${formatElapsed(elapsed)} นาที · ปกติ Flow จะจบภายในประมาณ 2 นาที หากเกินกว่านี้อาจติด Limit ของ AI / Apify หรือคิวประมวลผล`;
+}
+
+function startScrapeTimer() {
+  stopScrapeTimer();
+  scrapeStartedAt = Date.now();
+  updateScrapeTimerNote();
+  scrapeTimer = setInterval(updateScrapeTimerNote, 1000);
+}
+
+function stopScrapeTimer() {
+  if (scrapeTimer) {
+    clearInterval(scrapeTimer);
+    scrapeTimer = null;
+  }
+}
+
 function setupRunWorkflow() {
   qs("run-workflow").addEventListener("click", async () => {
+    const runButton = qs("run-workflow");
+    if (runButton.disabled) return;
+
     const areaInput = qs("refresh-area-input")?.value.trim() || "";
     let keyword = qs("keyword-input").value.trim();
     let targetCount = Number(qs("target-count").value || 20);
@@ -1463,8 +1498,10 @@ function setupRunWorkflow() {
       target_count: targetCount
     };
 
-    qs("run-workflow").disabled = true;
+    runButton.disabled = true;
+    runButton.textContent = "กำลังทำงาน...";
     qs("run-status").textContent = `กำลังส่งคำสั่งไป n8n: ${keyword} (${targetCount} ร้าน)...`;
+    startScrapeTimer();
 
     try {
       const res = await fetch(WEBHOOK_ENDPOINT, {
@@ -1473,12 +1510,15 @@ function setupRunWorkflow() {
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — ระบบจะไม่เรียก api-status ซ้ำอัตโนมัติแล้ว กรุณารอ Workflow จบแล้วรีเฟรชหน้าเว็บเพื่อดูข้อมูลล่าสุด`;
+      qs("run-status").textContent = `ส่งคำสั่งสำเร็จ: ${keyword} จำนวน ${targetCount} ร้าน — ระบบกำลังทำงานอยู่ กรุณารอประมาณ 2 นาทีแล้วรีเฟรชหน้าเว็บเพื่อดูข้อมูลล่าสุด`;
+      qs("run-timer-note").textContent = `ใช้เวลาไปแล้ว 0:00 นาที · ปกติ Flow จะจบภายในประมาณ 2 นาที หากเกินกว่านี้อาจติด Limit ของ AI / Apify หรือคิวประมวลผล`;
       stopStatusPolling();
     } catch (err) {
+      stopScrapeTimer();
       qs("run-status").textContent = `ส่งคำสั่งไม่สำเร็จ: ${err.message}`;
-    } finally {
-      qs("run-workflow").disabled = false;
+      qs("run-timer-note").textContent = "ส่งคำสั่งไม่สำเร็จ ยังไม่ได้เริ่มนับเวลา Workflow";
+      runButton.disabled = false;
+      runButton.textContent = "ค้นหาพื้นที่ใหม่";
     }
   });
 }
